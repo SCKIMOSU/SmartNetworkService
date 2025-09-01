@@ -1,4 +1,3 @@
-# SmanrtNetworkService
 # Untitled
 
 ---
@@ -111,7 +110,7 @@ b"World"
 
 ```
 
-👉 TCP와 달리, 절대 `b"HelloWorld"`로 합쳐지거나 분리되지 않음.
+ TCP와 달리, 절대 `b"HelloWorld"`로 합쳐지거나 분리되지 않음.
 
 ---
 
@@ -154,8 +153,6 @@ b"World"
 - 예시: DNS, 스트리밍, 온라인 게임, VoIP
 
 ---
-
-👉 요약:
 
 - **TCP** → “경계 없음, 신뢰성 O”
 - **UDP** → “경계 있음, 신뢰성 X”
