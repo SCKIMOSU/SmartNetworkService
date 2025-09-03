@@ -1,4 +1,4 @@
-# 네트워크 소켓 프로그래밍과SDN(Software Defined Networking) 과의 관계
+# 소켓 프로그래밍과 SDN과의 관계
 
 ---
 
