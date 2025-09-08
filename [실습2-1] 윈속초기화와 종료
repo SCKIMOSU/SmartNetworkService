@@ -1,0 +1,70 @@
+# [실습2-1] 윈속초기화와 종료
+
+- Windows 환경에서 **Winsock(윈속) API**를 사용해 TCP 소켓을 생성하고 종료하는 가장 기본적인 예제
+
+---
+
+1. 윈속 초기화
+
+```c
+WSADATA wsa;
+if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+    return 1;
+printf("[알림] 윈속 초기화 성공\n");
+
+```
+
+- `WSAStartup()` : 윈속 라이브러리를 초기화
+- `MAKEWORD(2, 2)` : Winsock 버전 2.2 사용을 요청
+- 성공하면 "[알림] 윈속 초기화 성공" 메시지를 출력
+- 초기화 실패 시 `return 1;`로 프로그램 종료.
+
+2. 소켓 생성
+
+---
+
+```c
+SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+if (sock == INVALID_SOCKET) err_quit("socket()");
+printf("[알림] 소켓 생성 성공\n");
+
+```
+
+- `socket()` : 소켓 생성
+    - `AF_INET` : IPv4 주소 체계 사용.
+    - `SOCK_STREAM` : TCP(연결 지향형) 소켓.
+    - `0` : 프로토콜을 자동 선택.
+- 실패 시 `INVALID_SOCKET`이 반환되어 `err_quit()` 함수 호출.
+- 성공하면 "[알림] 소켓 생성 성공" 출력.
+
+---
+
+1. 소켓 닫기
+
+```c
+closesocket(sock);
+
+```
+
+- `closesocket()` : 생성된 소켓을 닫아 자원 해제.
+
+1. 윈속 종료
+
+---
+
+```c
+WSACleanup();
+
+```
+
+- `WSACleanup()` : Winsock 사용 종료 및 관련 리소스 해제.
+
+---
+
+- 단계
+1. Winsock 초기화
+2. 소켓 생성
+3. 소켓 닫기
+4. Winsock 종료
+
+---
