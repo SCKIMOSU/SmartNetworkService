@@ -209,7 +209,7 @@ done
 
 ---
 
-- 1. Windows PowerShell에서 **리눅스(WSL, Ubuntu 22.04)** 를 실행
+- Windows PowerShell에서 **리눅스(WSL, Ubuntu 22.04)** 를 실행
     - 체크 :  가상화 →  사용
 
 ![image.png](dns7.png)
@@ -236,7 +236,7 @@ wsl -d Ubuntu-22.04
 
 ---
 
-- 2. 리눅스 기본 업데이트
+- 리눅스 기본 업데이트
     - Ubuntu 터미널이 열리면:
 
 ```bash
@@ -254,7 +254,7 @@ sudo apt update && sudo apt upgrade -y
 
 ![image.png](dns10.png)
 
-1. Nginx와 Python 설치
+- Nginx와 Python 설치
 
 ```bash
 sudo apt install -y nginx python3
@@ -267,7 +267,7 @@ sudo apt install -y nginx python3
 
 ![image.png](dns11.png)
 
-- 4. 백엔드 서버 준비
+- 백엔드 서버 준비
 
 ```bash
 mkdir -p ~/lb-lab/server1 ~/lb-lab/server2
@@ -280,7 +280,7 @@ echo "Hello from BACKEND-2" > ~/lb-lab/server2/index.html
 
 ![image.png](dns12.png)
 
-- 5. 백엔드 서버 실행
+- 백엔드 서버 실행
     - 같은 터미널에서도 가능, `&` 사용
 
 ```bash
@@ -291,7 +291,7 @@ python3 -m http.server 5002 --directory ~/lb-lab/server2 &
 
 ![image.png](dns13.png)
 
-- 6. 테스트:
+- 테스트:
 
 ```bash
 curl http://localhost:5001
@@ -303,7 +303,7 @@ curl http://localhost:5002
 
 ![image.png](dns14.png)
 
-- 7. Nginx 로드밸런싱 설정
+- Nginx 로드밸런싱 설정
 
 ```bash
 sudo nano /etc/nginx/sites-available/lb-lab
