@@ -383,15 +383,15 @@ server 127.0.0.1:5002;
 
 ---
 
-1. 클라이언트가 `http://localhost:8080` 으로 요청을 보냄
-2. Nginx(프록시)가 요청을 받아 `backend_pool` 로 전달
-3. `backend_pool` 안의 서버 5001, 5002 중 하나로 트래픽 분산
-4. 백엔드 서버가 응답 (`Hello from BACKEND-1` 또는 `Hello from BACKEND-2`)
-5. 응답을 다시 Nginx가 받아 클라이언트에게 반환
+- 클라이언트가 `http://localhost:8080` 으로 요청을 보냄
+- Nginx(프록시)가 요청을 받아 `backend_pool` 로 전달
+- `backend_pool` 안의 서버 5001, 5002 중 하나로 트래픽 분산
+- 백엔드 서버가 응답 (`Hello from BACKEND-1` 또는 `Hello from BACKEND-2`)
+- 응답을 다시 Nginx가 받아 클라이언트에게 반환
 
 ---
 
-- 8. 로드밸런싱 테스트
+- 로드밸런싱 테스트
 
 ```bash
 for i in {1..10}; do curl -s http://localhost:8080; done
