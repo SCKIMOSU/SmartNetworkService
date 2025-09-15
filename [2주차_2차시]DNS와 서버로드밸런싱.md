@@ -276,6 +276,33 @@ echo "Hello from BACKEND-2" > ~/lb-lab/server2/index.html
 
 ```
 
+
+명령어:
+
+```bash
+mkdir -p ~/lb-lab/server1 ~/lb-lab/server2
+```
+
+### 의미
+
+* `mkdir` → 새 디렉터리를 생성하는 명령어.
+* `-p` → 상위 디렉터리가 없으면 자동으로 함께 만들어주고, 이미 디렉터리가 존재해도 오류를 내지 않음.
+* `~/lb-lab/server1 ~/lb-lab/server2` → 홈 디렉터리(`~`) 아래에 `lb-lab/server1`과 `lb-lab/server2` 두 개의 하위 디렉터리를 생성.
+
+### 실행 결과
+
+명령어 실행 후 디렉터리 구조는 다음과 같이 됩니다:
+
+```
+lb-lab/
+ ├── server1/
+ └── server2/
+```
+
+즉, `~/lb-lab` 폴더 안에 `server1`과 `server2`라는 두 개의 디렉터리가 생김.
+
+
+
 ---
 
 ![image.png](dns12.png)
