@@ -163,7 +163,7 @@ int wmain(int argc, wchar_t **wargv) {
         attempt++;
         int s = (int)socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (s < 0) {
-            wprintf(L"❌ %d/%d: 소켓 생성 실패\n", attempt, total);
+            wprintf(L"%d/%d: 소켓 생성 실패\n", attempt, total);
             continue;
         }
 
@@ -181,13 +181,13 @@ int wmain(int argc, wchar_t **wargv) {
             wchar_t wip[INET6_ADDRSTRLEN];
             MultiByteToWideChar(CP_UTF8, 0, connected_ip, -1, wip, INET6_ADDRSTRLEN);
 
-            wprintf(L"✅ %d/%d번째 후보 연결 성공: %s (포트 %s, %llums)\n",
+            wprintf(L"%d/%d번째 후보 연결 성공: %s (포트 %s, %llums)\n",
                    attempt, total, wip, wport, dt);
             sockfd = s;
             break;
         } else {
             closesocket(s);
-            wprintf(L"❌ %d/%d번째 후보 연결 실패 (%llums)\n", attempt, total, dt);
+            wprintf(L"%d/%d번째 후보 연결 실패 (%llums)\n", attempt, total, dt);
         }
     }
 
