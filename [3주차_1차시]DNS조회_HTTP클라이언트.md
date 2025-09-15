@@ -1,8 +1,8 @@
 # DNS 조회 HTTP 클라이언트
 
-## 목적
+## 프로그램 목적
 
-- **입력된 호스트로 직접 TCP 소켓을 열어 HTTP 요청을 보내고, 응답 본문을 `output.html`에 저장한 뒤 브라우저로 자동 열어주는 간단한 HTTP 클라이언트**.
+- 이 프로그램은 **입력된 호스트로 직접 TCP 소켓을 열어 HTTP 요청을 보내고, 응답 본문을 `output.html`에 저장한 뒤 브라우저로 자동 열어주는 간단한 HTTP 클라이언트**.
 - 추가로 **여러 DNS 후보 중 몇 번째 시도에서 연결됐는지와 연결된 IP**를 화면과 파일에 기록.
 
 ## 기능
@@ -395,17 +395,70 @@ for (struct addrinfo *p = res; p; p = p->ai_next) {
 
 ## 8. HTTP GET 요청
 
+- 가장 단순한 HTTP 1.1 요청 `"GET /"` 전송.
+- Host 헤더 필수.
+
 ```c
+// HTTP GET 요청 문자열 생성
+char request[512];
 _snprintf_s(request, sizeof(request), _TRUNCATE,
             "GET / HTTP/1.1\r\n"
             "Host: %s\r\n"
-            "Connection: close\r\n\r\n", host);
+            "Connection: close\r\n"
+            "\r\n", host);
+
+// 소켓으로 요청 전송
 send(sockfd, request, (int)strlen(request), 0);
 
 ```
 
-- 가장 단순한 HTTP 1.1 요청 `"GET /"` 전송.
-- Host 헤더 필수.
+1. **HTTP 메서드와 경로**
+    
+    ```
+    GET / HTTP/1.1
+    
+    ```
+    
+    - `GET` → 리소스를 요청하는 HTTP 메서드
+    - `/` → 루트 경로 (즉, `http://호스트명/`)
+    - `HTTP/1.1` → 프로토콜 버전
+2. **필수 Host 헤더**
+    
+    ```
+    Host: example.com
+    
+    ```
+    
+    - HTTP/1.1부터는 **Host 헤더가 필수**
+    - 가상 호스팅(Virtual Hosting) 때문에 서버가 같은 IP라도 여러 도메인을 구분해야 하므로 반드시 사용
+3. **Connection 헤더**
+    
+    ```
+    Connection: close
+    
+    ```
+    
+    - 응답이 끝나면 서버가 소켓을 닫도록 지시.
+    - 없으면 서버가 keep-alive 연결을 유지할 수 있어서, 프로그램이 응답 끝을 파악하기 어려움.
+4. **헤더 끝 표시**
+    
+    ```
+    \r\n
+    
+    ```
+    
+    - HTTP는 CRLF(`\r\n`) 기반 프로토콜.
+    - 헤더 종료는 빈 줄(즉, `\r\n\r\n`)로 표시.
+    - 요청 끝에 `\r\n\r\n`을 넣어야 서버가 “헤더 끝”을 인식.
+5. **전송**
+    
+    ```c
+    send(sockfd, request, (int)strlen(request), 0);
+    
+    ```
+    
+    - 완성된 요청 문자열을 TCP 소켓에 전송.
+    - 서버는 이 요청을 받아 처리 후, 응답 헤더 + 본문을 돌려줌.
 
 ---
 
