@@ -317,7 +317,7 @@ static void init_console_wide(void) {
 ```c
 int wmain(int argc, wchar_t **wargv) {
     init_console_wide();
-    const wchar_t *whost = (argc >= 2) ? wargv[1] : L"www.example.com";
+    const wchar_t *whost = (argc >= 2) ? wargv[1] : L"www.google.com";
     const wchar_t *wport = (argc >= 3) ? wargv[2] : L"80";
 
 ```
