@@ -121,7 +121,7 @@ int wmain(int argc, wchar_t **wargv) {
     init_console_wide();
 
     // 호스트, 포트 파라미터 처리
-    const wchar_t *whost = (argc >= 2) ? wargv[1] : L"www.example.com";
+    const wchar_t *whost = (argc >= 2) ? wargv[1] : L"www.google.com";
     const wchar_t *wport = (argc >= 3) ? wargv[2] : L"80";
 
     // UTF-16 → UTF-8 변환 (getaddrinfo는 멀티바이트 필요)
