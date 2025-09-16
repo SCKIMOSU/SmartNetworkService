@@ -256,7 +256,7 @@ sudo apt update && sudo apt upgrade -y
 
 - sudo apt update
 
-![image.png](dns9.png)
+![image.png](update.png)
 
 - sudo apt upgrade
 
