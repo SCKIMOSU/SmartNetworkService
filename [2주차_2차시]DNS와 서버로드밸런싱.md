@@ -93,6 +93,9 @@ nslookup www.youtube.com 1.1.1.1
 - **8.8.8.8 DNS가** youtube 서버에 대해 **여러 개 IP 응답**
     - 한 도메인(www.youtube.com)에 대해 IP가 수십 개 나온 것은 **로드밸런싱 + CDN** 때문.
     - 클라이언트는 이 중 하나를 선택해 접속
+    ![image.png](nslookup_youtube_many_ip.png)
+
+    
 - **IPv6 + IPv4 동시 제공**
     - IPv6가 먼저 표시되는 건 요즘 DNS 응답의 일반적인 패턴.
     - IPv6 사용 가능 환경이면 우선 IPv6로 접속을 시도.
