@@ -407,11 +407,11 @@ sudo nginx -t
 sudo systemctl restart nginx
 
 ```
-- ln -s : 심볼릭 링크(symbolic link) 생성
+    - ln -s : 심볼릭 링크(symbolic link) 생성
 
-- /etc/nginx/sites-available/lb-lab : 원본 설정 파일 (가용한 사이트 설정 저장소)
+    - /etc/nginx/sites-available/lb-lab : 원본 설정 파일 (가용한 사이트 설정 저장소)
 
-- /etc/nginx/sites-enabled/ : Nginx가 실제로 불러오는 활성화된 사이트 설정 경로
+    - /etc/nginx/sites-enabled/ : Nginx가 실제로 불러오는 활성화된 사이트 설정 경로
 ---
 
 ![image.png](dns15.png)
