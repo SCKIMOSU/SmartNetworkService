@@ -276,7 +276,7 @@ echo "Hello from BACKEND-2" > ~/lb-lab/server2/index.html
 
 ```
 
-### 명령어:
+## 명령어:
 
 ```bash
 mkdir -p ~/lb-lab/server1 ~/lb-lab/server2
@@ -301,19 +301,19 @@ lb-lab/
 즉, `~/lb-lab` 폴더 안에 `server1`과 `server2`라는 두 개의 디렉터리가 생김
 
 
-### 명령어
+## 명령어
 
 ```bash
 echo "Hello from BACKEND-1" > ~/lb-lab/server1/index.html
 ```
 
-## 동작 원리
+### 동작 원리
 
 * `echo "Hello from BACKEND-1"` → 문자열 **Hello from BACKEND-1** 을 출력.
 * `>` → 출력 결과를 화면에 표시하지 않고 파일로 저장(리다이렉션)함.
 * `~/lb-lab/server1/index.html` → 저장할 파일 경로.
 
-## 실행 결과
+### 실행 결과
 
 * `~/lb-lab/server1/` 디렉터리 안에 `index.html` 파일이 새로 생성.
 * 파일 안에는 다음 내용이 저장됨:
@@ -322,7 +322,7 @@ echo "Hello from BACKEND-1" > ~/lb-lab/server1/index.html
 Hello from BACKEND-1
 ```
 
-## 확인 방법
+### 확인 방법
 
 파일이 제대로 생성되었는지 확인
 
