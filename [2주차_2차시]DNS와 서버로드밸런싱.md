@@ -260,7 +260,7 @@ sudo apt update && sudo apt upgrade -y
 
 - sudo apt upgrade
 
-![image.png](dns10.png)
+![image.png](upgrade.png)
 
 - Nginx와 Python 설치
 
