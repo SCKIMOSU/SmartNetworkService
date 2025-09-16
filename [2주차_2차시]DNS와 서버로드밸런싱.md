@@ -116,11 +116,11 @@ whois 142.250.197.206
 
 ```
 
-![image.png](dns2.png)
+
 
 - whois 142.250.197.142
 
-![image.png](dns3.png)
+![image.png](whois_google.png)
 
 - 출력
 
