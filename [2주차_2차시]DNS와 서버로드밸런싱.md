@@ -203,6 +203,64 @@ done
 
 ---
 
+### 코드 동작 단계별 설명
+
+1. **DNS 조회 (YouTube IP 확인)**
+
+   ```bash
+   nslookup www.youtube.com 8.8.8.8
+   ```
+
+   * 구글 DNS 서버(`8.8.8.8`)를 사용해 `www.youtube.com`의 IP 주소들을 가져옴
+
+2. **IP 주소만 추출**
+
+   ```bash
+   grep "Address" | awk '{print $2}' | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}'
+   ```
+
+   * `grep "Address"` → "Address"라는 단어가 포함된 줄만 추출
+   * `awk '{print $2}'` → 두 번째 필드(실제 IP 부분)만 출력
+   * `grep -Eo ...` → 정규식을 이용해 IPv4 형식(`x.x.x.x`)만 남김
+
+3. **IP 하나씩 반복 처리**
+
+   ```bash
+   for ip in $(...); do ...; done
+   ```
+
+   * 추출된 여러 개의 IP를 하나씩 변수 `ip`에 담아 반복 실행
+
+4. **IP와 위치 정보 출력**
+
+   ```bash
+   echo -n "$ip -> "
+   geoiplookup $ip | cut -d: -f2
+   ```
+
+   * `geoiplookup $ip` → 해당 IP의 위치(국가/지역)를 조회
+   * `cut -d: -f2` → `:` 기준으로 잘라서 위치 정보만 출력
+
+---
+
+### 출력
+
+YouTube가 여러 IP로 해석되면, 결과가 다음과 같이 나올 수 있음
+
+```
+142.250.185.206 -> US, California, Mountain View
+142.250.185.238 -> US, California, Mountain View
+216.58.214.110  -> US, California, Mountain View
+```
+
+**유튜브의 DNS IP 주소들을 찾아서, 각각 어느 나라/지역에 속해 있는지 확인**하는 코드
+
+---
+
+
+
+---
+
 - 결과
 
 ![image.png](dns6.png)
