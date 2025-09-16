@@ -69,6 +69,9 @@ Addresses:  142.250.190.14
            142.250.190.110
 
 ```
+![image.png](nslookup_google.png)
+
+
 
 ## **로드밸런싱(load balancing)**
 
