@@ -214,6 +214,10 @@ client_sock = accept(listen_sock, (struct sockaddr*)&clientaddr, &addrlen);
         - `listen_sock`: 여전히 **새로운 연결을 기다리는 역할** 유지
         - `client_sock`: 특정 클라이언트와 통신하는 **전용 소켓**
 
+    - 서버 프로세스: `socket → bind → listen` 호출 **(트리거)**
+    - 서버 커널:
+        - **(대기/SYN) 큐**: 핸드셰이크 진행 중인 항목을 보관
+        - **(완료/accept) 큐**: 3-way 핸드셰이크가 끝난 연결을 보관 → `accept()`가 여기서 꺼냄
 ---
 
 - **반환값**
