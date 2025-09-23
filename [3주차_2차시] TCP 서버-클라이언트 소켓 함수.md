@@ -80,7 +80,7 @@ SOCKET socket(int domain, int type, int protocol);
 
 ### **bind()**
 
-- 역할 : listen socket과 port (서버의 서비스) 연결
+- 역할 : listen socket과 port (서버의 서비스, 포트의 개념이 처음 나옴) 연결
 - 함수 반환값 : int
 
 ![image.png](tcp1.png)
