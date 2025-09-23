@@ -54,17 +54,15 @@ SOCKET socket(int domain, int type, int protocol);
         - 지원하지 않는 프로토콜 요청 등
 
 ---
-
-- **역할:** “IPv4 쓸래? IPv6 쓸래? 로컬 유닉스 소켓 쓸래?” 같은 **주소 체계 선택자**.
-- **함수 위치:** `socket(/**af**/, type, proto)`의 `af` 자리에 들어감.
+### **socket()**
+- ***역할:** “IPv4 쓸래? IPv6 쓸래? 로컬 유닉스 소켓 쓸래?” 같은 **주소 체계 선택자**.
+- ***함수 위치:** `socket(/**af**/, type, proto)`의 `af` 자리에 들어감.
 - **일치 규칙:**
     - `AF_INET` ↔ `struct sockaddr_in`
     - `AF_INET6` ↔ `struct sockaddr_in6`
     - `AF_UNIX/AF_LOCAL` ↔ `struct sockaddr_un`(윈도우도 최신에는 지원)
-    - 불일치 시 `WSAEAFNOSUPPORT`/`EINVAL` 류 오류.
-- **PF_ vs AF_:** 역사적으로 `PF_*`(Protocol Family) 매크로도 있었지만 **현대 코드는 AF_*만** 쓰면 됩니다(대부분 값 동일).
 
-## 자주 쓰는 주소 패밀리
+### 자주 쓰는 주소 패밀리
 
 - **AF_UNSPEC**: 미지정(주로 `getaddrinfo` 힌트로 IPv4/IPv6 모두 탐색).
 - **AF_INET**: IPv4.
@@ -72,7 +70,7 @@ SOCKET socket(int domain, int type, int protocol);
 - **AF_UNIX (AF_LOCAL)**: 로컬 IPC(윈도우 10+ 지원).
 - (플랫폼별) Windows: `AF_BTH`(블루투스), `AF_NETBIOS` 등 / Linux: `AF_PACKET`, `AF_NETLINK`, `AF_CAN` 등.
 
-## 중요
+### 중요
 
 - `socket()`에서 고른 AF와, `bind()/connect()`에 넘기는 `sockaddr_*`의 **형/길이**가 맞아야 함
 
