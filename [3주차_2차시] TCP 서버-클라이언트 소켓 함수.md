@@ -16,7 +16,7 @@
 SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
 if (listen_sock == INVALID_SOCKET) err_quit("socket()");
 ```
-
+---
 - **IPv4 TCP 소켓을 생성**하는 코드
 ```c
 SOCKET socket(int domain, int type, int protocol);
