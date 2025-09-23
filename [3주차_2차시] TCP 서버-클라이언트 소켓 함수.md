@@ -17,6 +17,7 @@ SOCKET listen_sock = socket(AF_INET, SOCK_STREAM, 0);
 if (listen_sock == INVALID_SOCKET) err_quit("socket()");
 ```
 
+- **IPv4 TCP 소켓을 생성**하는 코드
 ```c
 SOCKET socket(int domain, int type, int protocol);
 
@@ -30,7 +31,7 @@ SOCKET socket(int domain, int type, int protocol);
 - `protocol = 0`
     - 프로토콜을 명시하지 않고, 기본값을 사용하겠다는 뜻
     - (`AF_INET` + `SOCK_STREAM` 조합이면 TCP로 자동 선택)
-- **IPv4 TCP 소켓을 생성**하는 코드
+
 
 ---
 
