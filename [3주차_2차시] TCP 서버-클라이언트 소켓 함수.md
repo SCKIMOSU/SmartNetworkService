@@ -55,7 +55,6 @@ SOCKET socket(int domain, int type, int protocol);
 
 ---
 
----
 ### **socket()**
 - **역할:** “IPv4 쓸래? IPv6 쓸래? 로컬 유닉스 소켓 쓸래?” 같은 **주소 체계 선택자**.
 - **함수 위치:** `socket(/**af**/, type, proto)`의 `af` 자리에 들어감.
