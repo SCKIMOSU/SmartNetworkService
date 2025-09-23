@@ -108,6 +108,10 @@ memset(&serveraddr, 0, sizeof(serveraddr));
 - `sockaddr_in` 구조체는 IPv4 주소 정보를 담는 구조체.
 - `memset`으로 0 초기화 → 구조체 내부의 쓰레기값을 모두 없앰.
 
+- serveraddr 객체가 차지하는 모든 바이트를 0으로 채움.(패딩 포함)
+- sockaddr_in의 모든 필드( sin_family, sin_port, sin_addr.s_addr, sin_zero[] )가 바이트 단위로 0이 됨
+- 일반적으로 소켓 주소 구조체를 채우기 전에 이런 식으로 초기화하는 관례
+
 ```c
 serveraddr.sin_family = AF_INET;
 
