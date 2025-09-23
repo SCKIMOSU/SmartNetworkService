@@ -64,7 +64,7 @@ SOCKET socket(int domain, int type, int protocol);
     - `AF_INET6` ↔ `struct sockaddr_in6`
     - `AF_UNIX/AF_LOCAL` ↔ `struct sockaddr_un`(윈도우도 최신에는 지원)
 
-### 자주 쓰는 주소 패밀리
+### 자주 쓰는 주소 패밀리 (Address Family : AF)
 
 - **AF_UNSPEC**: 미지정(주로 `getaddrinfo` 힌트로 IPv4/IPv6 모두 탐색).
 - **AF_INET**: IPv4.
