@@ -54,10 +54,12 @@ SOCKET socket(int domain, int type, int protocol);
         - 지원하지 않는 프로토콜 요청 등
 
 ---
+
+---
 ### **socket()**
-- ***역할:** “IPv4 쓸래? IPv6 쓸래? 로컬 유닉스 소켓 쓸래?” 같은 **주소 체계 선택자**.
-- ***함수 위치:** `socket(/**af**/, type, proto)`의 `af` 자리에 들어감.
-- **일치 규칙:**
+- **역할:** “IPv4 쓸래? IPv6 쓸래? 로컬 유닉스 소켓 쓸래?” 같은 **주소 체계 선택자**.
+- **함수 위치:** `socket(/**af**/, type, proto)`의 `af` 자리에 들어감.
+- **규칙:**
     - `AF_INET` ↔ `struct sockaddr_in`
     - `AF_INET6` ↔ `struct sockaddr_in6`
     - `AF_UNIX/AF_LOCAL` ↔ `struct sockaddr_un`(윈도우도 최신에는 지원)
@@ -73,6 +75,7 @@ SOCKET socket(int domain, int type, int protocol);
 ### 중요
 
 - `socket()`에서 고른 AF와, `bind()/connect()`에 넘기는 `sockaddr_*`의 **형/길이**가 맞아야 함
+---
 
 
 ### **bind()**
