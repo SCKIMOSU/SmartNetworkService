@@ -131,11 +131,17 @@ serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
 - `htonl()` = **host to network long**
     - CPU의 바이트 순서(리틀엔디언/빅엔디언)를 네트워크 표준(빅엔디언)으로 변환.
 
-    - IP 주소 표기법은 RFC 791 (IPv4) 에서 정해진 점-십진수 표기법(dotted decimal notation) 을 따름.
-    - 즉, 0~255 범위의 정수 네 개를 점으로 구분하는 방식만이 유효한 IP 주소임.
-    - * 같은 와일드카드 문자는 IP 주소 표현 규격에 포함되지 않음.
-    - 따라서 *.*.*.* 는 합법적인 IP 주소 문자열이 아님.
+## IP 주소 표기법과 와일드카드 주소
 
+IP 주소 표기법은 [RFC 791 (IPv4)](https://datatracker.ietf.org/doc/html/rfc791) 에서 정해진
+**점-십진수 표기법(dotted decimal notation)** 을 따름.
+
+즉, `0~255` 범위의 정수 네 개를 점으로 구분하는 방식만이 유효한 IP 주소임
+
+------------------------------------------------------------------------
+
+같은 와일드카드 문자는 IP 주소 표현 규격에 포함되지 않음
+ `*.*.*.*` 는 **합법적인 IP 주소 문자열이 아님**
 ```c
 serveraddr.sin_port = htons(SERVERPORT);
 
