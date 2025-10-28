@@ -281,7 +281,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 - 결과 화면
 
-![image.png](image.png)
+![image.png](gui.png)
 
 ## **[2]** 버튼 클릭 횟수, 마우스 클릭 위치 GUI 프로젝트
 
@@ -658,11 +658,11 @@ PostQuitMessage(0);
 
 - 눌러주세요 버튼 클릭  화면 캡쳐
 
-![image.png](image%201.png)
+![image.png](gui1.png)
 
 - 빈 공간에서 마우스 클릭 화면 캡쳐
 
-![image.png](image%202.png)
+![image.png](gui2.png)
 
 ## **디바이스 컨텍스트 (Device Context)**
 
@@ -1005,7 +1005,7 @@ SendMessageA(hEdit, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
 
 - 출력
 
-![image.png](image%203.png)
+![image.png](gui3.png)
 
 ## [4] 메시지 루프 지연 : Sleep(3000) GUI 프로젝트
 
@@ -1013,11 +1013,11 @@ SendMessageA(hEdit, EM_REPLACESEL, FALSE, (LPARAM)cbuf);
     - 윈도우 크기를 변경할 때, 3초간 지연 발생
     - 스레드 필요 이유가 됨
 
-![image.png](image%204.png)
+![image.png](gui4.png)
 
 - 윈도우 메시지 처리와 소켓 통신, 데이터 처리를 동시에 하는 스레드 필요
 
-![image.png](image%205.png)
+![image.png](gui5.png)
 
 ## [5] TCPServer GUI 프로젝트
 
@@ -1248,7 +1248,7 @@ DWORD WINAPI ProcessClient(LPVOID arg)
 
 - 결과
 
-![image.png](image%206.png)
+![image.png](gui6.png)
 
 - **Win32 GUI 기반의 TCP 서버 프로그램**
     - 윈도우 창 안에서 로그를 실시간으로 표시하는 다중 클라이언트 TCP 서버
@@ -1540,6 +1540,6 @@ int main(int argc, char* argv[])
 
 - 출력화면 캡쳐
 
-![image.png](image%207.png)
+![image.png](gui7.png)
 
 ##
