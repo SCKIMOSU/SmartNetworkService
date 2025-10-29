@@ -1543,3 +1543,113 @@ int main(int argc, char* argv[])
 ![image.png](gui7.png)
 
 ##
+
+## WinMain()과 ServerMain()
+
+- WinMain()과 ServerMain()이 있다고 해서 자동으로 두 개의 스레드가 생기는 것은 아님
+    - **직접 `CreateThread()` 또는 `_beginthreadex()` 같은 함수를 호출해야 두 개의 스레드가 구성됨**
+
+---
+
+### `WinMain()`은 **프로그램의 진입점(Entry Point)**
+
+- Windows GUI 프로그램에서는 `main()` 대신 `WinMain()`이 프로그램이 시작되는 곳
+- 프로그램이 실행되면, **운영체제가 자동으로 하나의 메인 스레드(main thread)** 를 만들어서 `WinMain()` 함수를 실행시킴
+    - 이 시점에서 프로그램에는 **스레드 1개(메인 스레드)** 만 존재
+
+```c
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                   LPSTR lpCmdLine, int nCmdShow)
+
+```
+
+---
+
+### `ServerMain()`은 그냥 다른 함수일 뿐
+
+- 이름이 ServerMain이라도, 운영체제가 자동으로 스레드를 만들어 실행하지 않음
+- 따라서 이 함수는 `WinMain()` 안에서 직접 호출하거나,`CreateThread()` 등을 통해 **별도의 스레드로 실행해야만** 실제로 병렬로 동작함
+
+---
+
+### 단순 호출 (스레드 1개만 존재)
+
+- `ServerMain()`이 끝날 때까지 `WinMain()`도 기다림
+    - **단일 스레드 동작**
+
+```c
+int WINAPI WinMain(...) {
+    ServerMain();   // 그냥 함수 호출 → 같은 스레드에서 실행됨
+    return 0;
+}
+
+```
+
+---
+
+### 별도 스레드로 실행 (스레드 2개)
+
+- 하나의 스레드는 `WinMain()` (GUI 메시지 루프), 다른 하나는 `ServerMain()` (서버 루프)이 동시에 동작
+    - 즉, **2개의 스레드가 구성된 프로그램**
+
+```c
+DWORD WINAPI ServerMain(LPVOID lpParam) {
+    while (1) {
+        // 서버 루프
+        Sleep(1000);
+    }
+    return 0;
+}
+
+int WINAPI WinMain(...) {
+    // 스레드 생성
+    HANDLE hThread = CreateThread(
+        NULL, 0, **ServerMain**, NULL, 0, NULL);
+
+    // 동시에 GUI 메시지 루프 처리
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+
+    return 0;
+}
+
+```
+
+## 스레드 동작 구조
+
+```
+프로세스 (하나의 실행 프로그램)
+│
+├─ [스레드 1] WinMain  →  GUI 메시지 루프 처리
+│
+└─ [스레드 2] ServerMain  →  서버(네트워크) 루프 처리
+
+```
+
+---
+
+## 스레드 생성 함수
+
+| 함수 | 특징 |
+| --- | --- |
+| `CreateThread()` | Windows API 기본 스레드 생성 |
+| `_beginthreadex()` | C 런타임(CRT) 환경에서도 안전하게 스레드 생성 (권장) |
+
+---
+
+| 항목 | 설명 |
+| --- | --- |
+| `WinMain()` | 프로그램 시작점 — OS가 메인 스레드로 실행함 |
+| `ServerMain()` | 단순한 함수 (직접 호출하면 같은 스레드에서 실행됨) |
+| 두 개의 스레드 구성 | 자동 X, `CreateThread()`로 직접 생성해야 함 |
+| 일반적인 구조 | `WinMain()` → GUI 루프, `ServerMain()` → 서버 루프 (별도 스레드) |
+
+---
+
+- WinMain()과 ServerMain()이 있다고 해서 자동으로 두 개의 스레드가 생기지 않음
+    - 별도로 `CreateThread()` 또는 `_beginthreadex()`를 호출해야 진짜 2개의 스레드 프로그램이 됨
+
+---
