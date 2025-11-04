@@ -67,6 +67,12 @@
 
 ---
 
+| 구분                                                           | 원인                                     | 시간적 변화                  | 대표 현상                   | 주요 파라미터                                |
+| ------------------------------------------------------------ | -------------------------------------- | ----------------------- | ----------------------- | -------------------------------------- |
+| **Long-Term Fading** (Large-Scale Fading, Log-normal Fading) | 거리 감쇠(Path Loss) + 큰 지형물 차폐(Shadowing) | 수백 m ~ 수 km 이동 시 천천히 변함 | 건물 뒤나 터널 등에서 신호 전체가 약해짐 | Path Loss Exponent, Shadowing Variance |
+| **Short-Term Fading** (Small-Scale Fading, Multipath Fading) | **Multipath 전파** 및 **도플러 효과**          | 수 cm~수 m 이동에도 빠르게 변함    | 수신 신호가 빠르게 세기 변화        | Rayleigh / Rician 분포                   |
+
+
 ## Short-Term Fading (단기 페이딩)의 세부 물리 현상
 
 ### 1. Reflection (반사)
