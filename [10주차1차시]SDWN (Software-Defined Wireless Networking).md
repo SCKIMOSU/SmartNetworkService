@@ -101,6 +101,8 @@
 
 ---
 
+![image.png](Fading.png)
+
 ![image.png](swdn4.png)
 
 ![image.png](swdn5.png)
