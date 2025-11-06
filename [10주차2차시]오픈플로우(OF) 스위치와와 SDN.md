@@ -985,6 +985,22 @@ mininet-wifi> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 - 스위치 포트 번호가 환경에 따라 달라질 수 있음
     - `sudo ovs-ofctl -O OpenFlow13 show s1` 로 실제 번호를 확인한 뒤, `ryu_sfc.py`의 `P_H1/P_FW/P_NAT/P_H2` 값을 맞춤
 
+```bash
+h1 wget -O- --timeout=2 http://10.0.0.2:80 || echo "blocked (fw)"
+```
+
+-  h1: Mininet에서 호스트 1 (h1)에서 명령 실행
+
+- wget -O-: HTTP 응답을 표준 출력(stdout)으로 표시
+
+- --timeout=2: 2초 안에 응답이 없으면 실패 처리
+
+- || echo "blocked (fw)": 실패 시 "blocked (fw)" 문구 출력
+
+- h1 → fw → nat → h2 경로를 통해 h2(IP 10.0.0.2)의 80번 포트로 접속을 시도
+    - 2초 이내에 응답이 없으면 “blocked (fw)”를 표시
+
+
 ## **서비스 기능 체인 (SFC, Service Function Chaining)**
 
 - **Ryu SDN 컨트롤러**(OpenFlow 1.3 기반)를 사용해서 **단일 스위치(s1)** 에서 트래픽을 **서비스 체인(SFC, Service Function Chaining)** 경로로 강제 우회시키는 코드
