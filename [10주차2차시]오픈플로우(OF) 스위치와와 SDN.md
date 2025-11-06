@@ -406,7 +406,7 @@ sudo python3 nfv_sfc_topo.py
 
 ```
 
-![sdn.png](sdn.png)
+![sdn.png](of.png)
 
 ---
 
@@ -952,7 +952,7 @@ ryu-manager ryu_sfc.py
 
 - 화면
 
-![sdn.png](sdn%201.png)
+![sdn.png](of1.png)
 
 - **터미널 B (Mininet)**
 
@@ -963,7 +963,7 @@ sudo python3 nfv_sfc_topo.py
 
 - 화면
 
-![sdn.png](sdn%202.png)
+![sdn.png](of2.png)
 
 - **Mininet CLI에서 테스트**
 
