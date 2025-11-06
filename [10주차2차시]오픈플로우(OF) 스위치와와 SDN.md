@@ -1438,3 +1438,74 @@ dp.send_msg(p.OFPFlowMod(
 | h1이 `h2`의 MAC을 모르고 ARP Request 보냄 | 스위치가 `eth_type=0x0806` 규칙에 매칭됨 | 컨트롤러(Ryu)에게 PacketIn 이벤트 발생 |
 | 컨트롤러(Ryu 앱) | `handle_arp()` 같은 함수에서 ARP를 직접 응답하거나 flood 제어 | 네트워크가 중앙 제어로 ARP 처리 |
 | IPv4 패킷 (eth_type=0x0800) | 별도 규칙이 없으면 Drop | 불필요한 flooding 방지 |
+
+
+# [9] SDN + NFV
+
+- **NFV**
+    - `fw`, `nat` 같은 **네트워크 기능을 범용 서버(호스트)에서 실행**
+- **SDN**
+    - Ryu가 **서비스 체인 경로**를 **동적으로 설치/변경**
+    - 체인에 IDS를 추가하려면 스위치 플로우만 갱신
+
+---
+
+## **NFV 시나리오**
+
+- `ping`은 **정상 통과**, `wget`은 **"blocked (fw)"** 로 막힘
+- `ping`은 **정상 통과**, `wget`은 **"blocked (fw)"** 로 막힘
+- **정상적으로 동작 중인 NFV 시나리오**
+
+---
+
+## 네트워크
+
+| 구간 | 설명 |
+| --- | --- |
+| `h1 → h2` ping 성공 | **Ryu SDN Controller**가 설정한 SFC(서비스 체인) 경로를 따라, `fw → nat`을 거쳐 ICMP 패킷 전달됨 |
+| `h1 → h2` HTTP(포트 80) 실패 | `fw` 호스트(VNF)의 **iptables 룰**이 `tcp dport 80` 트래픽을 드롭시켜 **방화벽 정책이 동작함** |
+| 출력 `blocked (fw)` | 스크립트에서 의도한 차단 메시지 ( |
+
+---
+
+## 구성
+
+```
+h1 --> [SDN Switch s1] --> [VNF: fw] --> [VNF: nat] --> [h2]
+
+```
+
+| 구성 요소 | 역할 | 기술 |
+| --- | --- | --- |
+| **Ryu 컨트롤러 (ryu_sfc.py)** | SDN 제어 평면 | 트래픽을 `fw → nat` 경로로 우회 |
+| **fw (VNF 1)** | 방화벽 기능 수행 | iptables로 TCP/80 차단 |
+| **nat (VNF 2)** | NAT 기능 수행 | iptables SNAT |
+| **Mininet + OVS** | 데이터 평면 | 패킷 포워딩 및 가상 링크 |
+
+---
+
+1. **fw의 방화벽 정책 확인**
+    - TCP/80 DROP 룰이 존재
+    
+    ```bash
+    mininet> fw iptables -L -n --line-numbers
+    
+    ```
+    
+2. **nat의 SNAT 기능 검증**
+    - 캡처된 패킷의 **src IP = 10.0.0.254**이면 NAT 작동 중입니다.
+    
+    ```bash
+    mininet> h2 tcpdump -i h2-eth0 -n -c 3 &
+    mininet> h1 ping -c 1 10.0.0.2
+    
+    ```
+    
+3. **Ryu의 플로우 테이블 보기**
+    - `in_port=1 actions=output:2` → `in_port=2 actions=output:3` → `in_port=3 actions=output:4` 순서 확인.
+  
+    ```bash
+    mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
+    
+    ```
+
