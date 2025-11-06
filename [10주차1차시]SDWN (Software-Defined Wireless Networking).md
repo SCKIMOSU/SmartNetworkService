@@ -1067,7 +1067,7 @@ mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1   # 설치된 플로우 확인
 ---
 
 - 스위치: `s1` (테이블 0)
-- 컨트롤러: 러닝 스위치 계열(제가 준 예제처럼)로 보임
+- 컨트롤러: 러닝 스위치
 - 결과
     - **세 호스트 간(eth1–eth2, eth1–eth3, eth2–eth3) MAC 학습**
     - 각 방향별로 **우선순위 1의 포워딩 플로우**가 깔렸고, **테이블-미스**는 `priority=0, actions=CONTROLLER` 로 유지
