@@ -1045,6 +1045,8 @@ mininet> h1 ping -c 1 h2
 mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1   # 설치된 플로우 확인
 
 ```
+- Pingall하기 전 규칙이 생성되기 전의 스위치 None 플로우  
+![sdn.png](sdn0.png)
 
 - 처음 트래픽은 규칙이 없어 스위치→컨트롤러로 **Packet-In**.
 - 컨트롤러가 **FlowMod**로 규칙을 내려 설치.
