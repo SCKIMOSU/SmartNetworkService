@@ -410,7 +410,7 @@ sudo python3 nfv_sfc_topo.py
 
 # [3] **OpenFlow 스위치(`s1`) 포트 정보**
 
-- **OpenFlow 스위치(`s1`)의 포트 매핑 정보**를 보여주는 `OFPT_FEATURES_REPLY` 및 `OFPST_PORT_DESC reply` .
+- **OpenFlow 스위치(`s1`)의 포트 매핑 정보**를 보여주는 `OFPT_FEATURES_REPLY` 및 `OFPT_PORT_DESC reply` .
 - **`ovs-ofctl show s1`** 명령 실행
 
 ## 스위치 기본 정보
