@@ -948,9 +948,7 @@ sudo python3 nfv_sfc_topo.py
 
 ```
 
-- 화면
 
-![sdn.png](of2.png)
 
 - **Mininet CLI에서 테스트**
 
@@ -968,6 +966,11 @@ mininet-wifi> h1 ping -c 1 10.0.0.2
 mininet-wifi> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 
 ```
+
+- 화면
+
+![sdn.png](of2.png)
+
 
 - 스위치 포트 번호가 환경에 따라 달라질 수 있음
     - `sudo ovs-ofctl -O OpenFlow13 show s1` 로 실제 번호를 확인한 뒤, `ryu_sfc.py`의 `P_H1/P_FW/P_NAT/P_H2` 값을 맞춤
