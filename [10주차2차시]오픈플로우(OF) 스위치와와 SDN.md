@@ -4,12 +4,12 @@
 
 # [1] SDN과 NFV
 
-- 현대 네트워크 기술의 핵심 축
+- 네트워크 기술의 핵심 축
     - 두 개념은 **서로 다른 문제를 해결하지만, 서로 보완적인 관계**
 
 | 구분 | SDN (소프트웨어 정의 네트워킹) | NFV (네트워크 기능 가상화) |
 | --- | --- | --- |
-| 핵심 아이디어 | 네트워크의 제어(Control)를 중앙에서 **소프트웨어로 관리** | 네트워크의 기능(Function)을 **가상화(Virtualization)** |
+| 핵심 아이디어 | 네트워크의 제어(Control)를 중앙에서 **소프트웨어로 관리** | 네트워크의 기능(Function) **가상화(Virtualization)** |
 | 주요 구성 요소 | Controller, Switch, OpenFlow 등 | VNF(Virtual Network Function), NFVI, MANO 등 |
 | 초점 | **네트워크 제어의 분리와 자동화** | **네트워크 장비의 기능을 가상화하여 유연하게 배포** |
 | 예시 | SDN Controller가 OpenFlow 스위치를 제어 | 방화벽, 라우터, DPI, NAT 등의 기능을 가상머신(VM)으로 실행 |
@@ -22,8 +22,8 @@
     - **네트워크를 어떻게 제어할 것인가**
     - **두뇌(제어)** 역할
 - **NFV**
-    - **그 네트워크 기능을 어디서, 어떻게 실행할 것인가**
-    - **NFV는 근육(기능 수행)** 역할
+    - **네트워크 기능을 어디서, 어떻게 실행할 것인가**
+    - **근육(기능 수행)** 역할
 
 ---
 
@@ -83,7 +83,7 @@
 
 ---
 
-# 네트워크 토폴로지 (구성도) :  Mininet — `nfv_sfc_topo.py`
+# 네트워크 토폴로지 :  Mininet — `nfv_sfc_topo.py`
 
 ```python
 # nfv_sfc_topo.py
@@ -144,9 +144,7 @@ if __name__ == '__main__':
 
 ---
 
----
-
-### 네트워크 토폴로지(구성도) : `h1 -- s1 -- fw -- s1 -- nat -- s1 -- h2`
+### 네트워크 토폴로지 : `h1 -- s1 -- fw -- s1 -- nat -- s1 -- h2`
 
 - **h1, h2**
     - 호스트 : 컴퓨터나 서버
@@ -770,8 +768,6 @@ h1 --- s1 --- fw --- s1 --- nat --- s1 --- h2
 
 ---
 
----
-
 # [7] **기존 물리 방화벽(하드웨어)**
 
 - **물리 방화벽**(Hardware Firewall)은 전용 네트워크 보안 장비로서, 네트워크 트래픽을 **하드웨어 기반으로 필터링·제어**하여 내부 네트워크를 외부 공격으로부터 보호하기 위한 장비
@@ -985,49 +981,286 @@ mininet-wifi> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 - 스위치 포트 번호가 환경에 따라 달라질 수 있음
     - `sudo ovs-ofctl -O OpenFlow13 show s1` 로 실제 번호를 확인한 뒤, `ryu_sfc.py`의 `P_H1/P_FW/P_NAT/P_H2` 값을 맞춤
 
-```bash
-h1 wget -O- --timeout=2 http://10.0.0.2:80 || echo "blocked (fw)"
-```
+## **리눅스 네임스페이스(network namespace)**
 
--  h1: Mininet에서 호스트 1 (h1)에서 명령 실행
+- 하나의 물리적인 커널 위에서 서로 **독립된 네트워크 환경** (IP, 라우팅, 인터페이스, ARP 테이블 등)을 갖도록 만드는 기술
+    - 여러 호스트, 스위치, 링크가 **서로 완전히 분리된 네트워크**처럼 작동
+        - 호스트 :  리눅스 네임스페이스로 분리
+        - 스위치/액세스포인트 : 루트 네임스페이스에서 OpenFlow 스택과 통신
+- **Mininet-WiFi (mn-wifi) 의 내부 구조**
+    - **각 호스트(host)·스테이션(station) :** 리눅스 **네임스페이스(namespace)** 안에서 실행
+    - **스위치나 액세스 포인트(switch/AP)** :  **루트 네임스페이스(root namespace)** 에서 동작
+    
+    ![sdn.png](of3.png)
+    
 
-- wget -O-: HTTP 응답을 표준 출력(stdout)으로 표시
+- **Root namespace**
+    - Linux 기본 네트워크 공간
+        - root 공간 안에 **switch** 또는 **access point(AP)** 인터페이스(`eth`, `wlan`)가 존재
+    - 주요 컴포넌트
+        - `ofdatapath`
+            - OpenFlow 데이터패스
+            - 스위치의 실제 패킷 처리 엔진
+        - `ofprotocol`
+            - OpenFlow 프로토콜 처리
+            - 컨트롤러와 통신
+        - `mn-wifi`
+            - 무선 환경(Access Point, Station 연결) 관리
 
-- --timeout=2: 2초 안에 응답이 없으면 실패 처리
+## Host/Station Namespace
 
-- || echo "blocked (fw)": 실패 시 "blocked (fw)" 문구 출력
-
-- h1 → fw → nat → h2 경로를 통해 h2(IP 10.0.0.2)의 80번 포트로 접속을 시도
-    - 2초 이내에 응답이 없으면 “blocked (fw)”를 표시
-
-
-## **서비스 기능 체인 (SFC, Service Function Chaining)**
-
-- **Ryu SDN 컨트롤러**(OpenFlow 1.3 기반)를 사용해서 **단일 스위치(s1)** 에서 트래픽을 **서비스 체인(SFC, Service Function Chaining)** 경로로 강제 우회시키는 코드
-- 호스트 h1 → 방화벽(fw) → NAT → h2로 가는 경로를 만들고, 반대 방향도 대칭으로 설정
+- `h1`, `h2`, `sta1`, `sta2`
+    - 노드들은 **각각 분리된 network namespace** 로 존재
+- 각 네임스페이스에는 해당 노드만의 인터페이스가 있음
+    - 유선 링크
+        - `h1-eth0`, `h2-eth0`
+    - 무선 링크
+        - `sta1-wlan0`, `sta2-wlan0`
+- `/bin/bash`
+    - 각 호스트 안에서 실행하는 쉘 환경
+    - `mininet> h1 ifconfig`
+        - `ip netns exec h1 ifconfig` 와 같음
 
 ---
 
-- **OpenFlow 버전**
-    - 1.3
-- **스위치**
-    - s1
-- **포트 구성**
-    - 포트 번호들은 `nfv_sfc_topo.py` (토폴로지 스크립트)에서 정의된 링크 순서에 따라 부여
+## 링크 연결 관계
+
+- 각 host/station의 인터페이스는 **root namespace의 switch/AP 인터페이스와 연결(link)** 되어 있음
+- `link` 화살표
+    - **veth(가상 이더넷 쌍)**
+    - **무선 연결(wlan link)**을 나타냄
+
+```
+h1-eth0 <--> s1-eth1
+h2-eth0 <--> s1-eth2
+
+```
+
+---
+
+## 컨트롤러와의 통신
+
+- Root namespace 안의 `ofprotocol` 프로세스가 **TCP/SSL**로 컨트롤러(`127.0.0.1:6633`)와 통신
+- 스위치(s1)의 인터페이스(`eth0`)가 실제로는 이 OpenFlow 연결을 통해 컨트롤러에 연결됨
+
+```
+switch/datapath <-> ofprotocol <-> controller
+
+```
+
+---
+
+| 구성 요소 | 위치 | 역할 |
+| --- | --- | --- |
+| `ofdatapath`, `ofprotocol` | Root namespace | 스위치 기능 및 컨트롤러와의 통신 |
+| `mn-wifi` | Root namespace | 무선 연결 관리 |
+| `h1`, `h2`, `sta1`, `sta2` | Host/station namespace | 독립된 가상 호스트 |
+| `h1-eth0`, `sta1-wlan0` 등 | Host/station namespace | 스위치/AP와 연결된 인터페이스 |
+| `switch:eth`, `accesspoint:wlan` | Root namespace | 링크 종단점 (veth/wlan) |
+
+## `ping`패킷 처리 순서
+
+- **Mininet-WiFi (mn-wifi)**에서는 각 호스트(h1, h2)가 **별도 네임스페이스(namespace)** 안에서 동작
+- 스위치(s1)는 **root namespace**에서 실행됨
+
+---
+
+## 1단계 : h1에서 패킷 생성
+
+- h1의 bash 셸에서 `ping 10.0.0.2` 실행
+    - ICMP 요청 패킷(`ICMP Echo Request`) 생성
+        - 출발지 IP: `10.0.0.1`, 목적지 IP: `10.0.0.2`
+    - h1의 인터페이스 `h1-eth0`로 송출
+    - `ip netns exec h1 ping 10.0.0.2` 와 동일
+
+---
+
+## 2단계 : **veth(가상 이더넷 쌍)** 링크를 통해 root namespace의 s1로 전달
+
+- `h1-eth0`는 실제로 root 네임스페이스의 `s1-eth1`과 연결된 **veth pair**
+    - 커널 레벨에서 `h1-eth0`의 TX(송신)가 `s1-eth1`의 RX(수신)으로 바로 이어짐
     
-    | 포트 | 목적지 |
-    | --- | --- |
-    | 1 | h1 |
-    | 2 | fw (방화벽) |
-    | 3 | nat |
-    | 4 | h2 |
+    ```
+    h1-eth0 <--> s1-eth1
+    
+    ```
+    
+
+---
+
+## 3단계 : s1(Open vSwitch)의 패킷 수신
+
+- `s1`(Open vSwitch datapath)이 `s1-eth1`을 통해 패킷을 받음
+- 스위치의 **플로우 테이블(flow table)** 에 해당하는 규칙이 있는지 검사
+    - 규칙이 있으면
+        - 해당 액션(예: 출력 포트) 수행
+    - 규칙이 없으면
+        - table-miss → **packet-in** 발생
+
+---
+
+## 4단계 : 컨트롤러로 packet-in 전송
+
+- `ofdatapath`가 `ofprotocol`을 통해 **OpenFlow 메시지(Packet-In)** 생성
+    - TCP 연결(보통 `127.0.0.1:6633`)을 통해 **컨트롤러**로 전달
+    - 컨트롤러는 패킷 헤더를 분석하고, 새로운 **flow rule**을 계산
+
+---
+
+## 5단계 : 컨트롤러가 Flow-Mod로 응답
+
+- 컨트롤러는 스위치에 **Flow-Mod 메시지(OpenFlow FlowMod)** 전송
+    - 목적지 MAC이 h2이면 포트 2(s1-eth2)로 보내라는 규칙을 스위치에 설치
+    
+    ```
+    Match: in_port=1, dl_dst=00:00:00:00:00:02
+    Action: output:2
+    
+    ```
+    
+
+---
+
+## 6단계 : 스위치가 h2로 패킷 포워딩
+
+- 새로 설치된 규칙에 따라 s1이 패킷을 s1-eth2로 출력
+- veth 링크를 통해 root namespace의 s1-eth2 ↔ h2-eth0 연결
+    - 패킷이 h2 네임스페이스로 전달됨
+    
+    ```
+    s1-eth2 <--> h2-eth0
+    
+    ```
+    
+
+---
+
+## 7단계 : h2에서 패킷 수신 및 응답
+
+- h2의 커널이 ICMP 요청을 수신
+    - ICMP Reply 생성
+- 응답 패킷이 반대 경로로 전송
+    
+    ```
+    h2-eth0 → s1-eth2 → **(플로우 매치)** → s1-eth1 → h1-eth0
+    
+    ```
+    
+- h1이 ICMP Reply를 수신하면 ping 성공
+    
+    ```
+    64 bytes from 10.0.0.2: icmp_seq=1 ttl=64 time=0.3 ms
+    
+    ```
+    
+
+---
+
+## 8단계 : 이후 패킷은 컨트롤러 없이 처리
+
+- 동일한 플로우(예: h1↔h2 통신)에 대해서는 이미 규칙이 설치되어 있으므로,
+    - 이후 ping은 스위치에서 바로 처리되어 컨트롤러 개입이 없음
+- `dump-flows` 명령으로 보면 새로 설치된 규칙이 표시됨
+    
+    ```
+    mininet> **sh ovs-ofctl -O OpenFlow13 dump-flows s1**
+    cookie=0x0, duration=5.3s, table=0, n_packets=2, n_bytes=196, priority=1,in_port=1,dl_dst=00:00:00:00:00:02 actions=output:2
+    
+    ```
+    
+
+---
+
+## h1 → h2 패킷 경로
+
+```
+h1 (namespace)
+   ↓
+h1-eth0
+   ↓ veth
+s1-eth1 (root ns)
+   ↓
+Open vSwitch (s1)
+   ↓ (flow match)
+s1-eth2
+   ↓ veth
+h2-eth0
+   ↓
+h2 (namespace)
+
+```
+
+---
+
+### wget 명령
+
+- **h1(10.0.0.1)에서 h2(10.0.0.2)의 80/tcp로 HTTP 요청을 보내고**,
+    - 2초 안에 성공하면
+        - 응답 바디를 그대로 출력
+    - 실패하면
+        - `"blocked (fw)"` 출력
+
+```bash
+h1 wget -O- --timeout=2 http://10.0.0.2:80 || echo "blocked (fw)"
+
+```
+
+- `h1 ...`
+    - Mininet에서 **호스트 h1의 네임스페이스**에서 실행
+- `wget -O-`
+    - `wget`
+        - 웹 서버에서 파일을 **다운로드하여 저장**하는 명령
+    - `-O-`
+        - 받은 내용을 **표준출력(Output)으로** 보냄(파일 저장 아님)
+        - 다운받은 데이터를 파일로 저장하지 않고, 표준출력(stdout)에 바로 출력
+- `-timeout=2`
+    - **2초** 안에 연결/응답이 없으면 실패 처리.
+- `|| echo "blocked (fw)"`
+    - `wget`이 **실패(exit code ≠ 0)** 하면 `"blocked (fw)"` 출력.
+
+### 성공/실패 예시
+
+- **성공 시**
+    
+    ```
+    mininet> h1 wget -O- --timeout=2 http://10.0.0.2:80
+    <h2의 웹서버가 내보낸 HTML/텍스트...>
+    
+    ```
+    
+- **실패 시(차단/서버없음/미응답)**
+    
+    ```
+    mininet> h1 wget -O- --timeout=2 http://10.0.0.2:80 || echo "blocked (fw)"
+    blocked (fw)
+    
+    ```
+    
+
+# **서비스 기능 체인 (SFC, Service Function Chaining)**
+
+- **Ryu SDN 컨트롤러**
+    - OpenFlow 1.3 사용
+    - **단일 스위치(s1)** 에서 트래픽을 **서비스 체인(SFC, Service Function Chaining)** 경로로 강제 우회
+        - 호스트 h1 → 방화벽(fw) → NAT → h2로 가는 경로 만들고, 반대 방향도 대칭으로 설
+            - **OpenFlow 버전 :** 1.3
+            - **스위치 :** s1
+            - **포트 구성**
+                - 포트 번호들은 `nfv_sfc_topo.py` (토폴로지 스크립트)에서 정의된 링크 순서 따라 부여
+                
+                | 포트 | 목적지 |
+                | --- | --- |
+                | 1 | h1 |
+                | 2 | fw (방화벽) |
+                | 3 | nat |
+                | 4 | h2 |
 
 ---
 
 ### RyuApp 초기화
 
-- `RyuApp`을 상속받아 SDN 컨트롤러 앱을 정의
-- OpenFlow 1.3 프로토콜을 사용하도록 지정
+- `RyuApp`을 상속받아 SDN 컨트롤러 앱 정의
+    - OpenFlow 1.3 프로토콜을 사용하도록 지정
 
 ```python
 class SimpleSFC(app_manager.RyuApp):
@@ -1037,57 +1270,45 @@ class SimpleSFC(app_manager.RyuApp):
 
 ---
 
-### Switch Features Event 핸들러 등록
+### `@set_ev_cls` : **이벤트 핸들러 등록** **데코레이터**
 
-- 스위치가 컨트롤러에 처음 연결될 때 발생하는 이벤트(`EventOFPSwitchFeatures`)를 처리.
-- 이 시점에 **Flow Entry**(플로우 규칙)를 스위치에 설치
+- **Ryu 이벤트 데코레이터**
+    - 특정 이벤트가 발생했을 때 어떤 함수가 실행될지 지정
+    - 이 이벤트가 오면 이 함수를 실행해라를 설정
+- **스위치가 컨트롤러에 처음 연결**될 때 발생하는 이벤트(`EventOFPSwitchFeatures`) 처리
+    - 이 시점에 **Flow Entry**(플로우 규칙)를 스위치에 설치
 
 ```python
-@set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
-def switch_features_handler(self, ev):
+**@set_ev_cls**(**ofp_event**.EventOFPSwitchFeatures, CONFIG_DISPATCHER) **//이벤트**
+def switch_features_handler(self, ev):    **//이벤트핸들러** 
 
 ```
-
----
-
-## **이벤트 기반 핸들러 등록** **데코레이터**
 
 - `@set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)`
-    - “스위치가 컨트롤러에 연결되어 초기 설정 단계(CONFIG_DISPATCHER)에 들어오면,
+    - 스위치가 컨트롤러에 연결되어 초기 설정 단계(CONFIG_DISPATCHER)에 들어오면,
         
-        `switch_features_handler()` 함수를 실행시켜라”
+        `switch_features_handler()` 함수를 실행시켜라는 의미
         
-
----
-
-## `@set_ev_cls`
-
-- **Ryu 이벤트 시스템의 데코레이터**로, 특정 이벤트가 발생했을 때 어떤 함수가 실행될지를 지정
-- 이 이벤트가 오면 이 함수를 실행해라"를 설정
-
-```python
-@set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
-def switch_features_handler(self, ev):
-    ...
-
-```
 
 ---
 
 ## `ofp_event.EventOFPSwitchFeatures`
 
-- 이 이벤트는 **스위치가 처음 컨트롤러에 연결될 때** 발생
-- OpenFlow의 **Features Reply**메시지가 도착할 때 트리거됨
+- 이벤트
+    - **스위치가 처음 컨트롤러에 연결될 때** 발생
+- OpenFlow의 **Features Reply**메시지가 도착할 때 이벤트가 트리거됨
     - 스위치가 “나 이런 포트와 기능을 가지고 있어요”라고 컨트롤러에 보고할 때 발생하는 이벤트
-    - **하는 일 :** 스위치의 초기 플로우 엔트리(기본 규칙)를 설치
+    - **하는 일**
+        - 스위치의 초기 플로우 엔트리(기본 규칙)를 설치
         - 미스 패킷을 컨트롤러로 보내기
-        - SFC 경로 설정 등.
+        - SFC 경로 설정 등
 
 ---
 
-## `CONFIG_DISPATCHER`
+## Ryu **Dispatcher (디스패처)**
 
-- Ryu에서 스위치의 상태를 표현하는 **Dispatcher 단계** 중 하나
+- **스위치와 컨트롤러 간의 연결 상태**를 나타냄
+    - 스위치가 연결되고 나서 **어느 단계(phase)**에 있는지를 구분하기 위해 사용
 
 | Dispatcher 단계 | 설명 |
 | --- | --- |
@@ -1095,7 +1316,8 @@ def switch_features_handler(self, ev):
 | `CONFIG_DISPATCHER` | 스위치가 Features Reply를 보낸 후 설정 가능한 상태 |
 | `MAIN_DISPATCHER` | 플로우 메시지, 패킷인 이벤트 등 일반 상태 |
 | `DEAD_DISPATCHER` | 연결이 끊긴 상태 |
-- `CONFIG_DISPATCHER`는 **스위치가 막 연결되어 초기 설정이 가능한 상태**를 의미
+- `CONFIG_DISPATCHER`
+    - **스위치가 막 연결되어 초기 설정이 가능한 상태** 의미
     - 이 단계에서 **FlowMod**(플로우 추가) 명령을 보내는 것
 
 ---
@@ -1109,26 +1331,139 @@ def switch_features_handler(self, ev):
 
 ---
 
-### 기본 테이블 미스 (디버깅용)
+## Ryu 컨트롤러 **테이블 미스(table-miss)** 플로우 추가
 
-- 매칭되지 않은 패킷(테이블 미스)은 컨트롤러로 보냄
-- 주로 디버깅이나 초기 테스트용.
+- **스위치가 어떤 패킷에도 매칭되지 않았을 때 그 패킷을 컨트롤러로 보내도록 설정**
+
+---
 
 ```python
+# 0) 테이블 미스 → 컨트롤러로 (디버그용)
 miss = p.OFPFlowMod(datapath=dp, priority=0, match=p.OFPMatch(),
-    instructions=[p.OFPInstructionActions(
-        ofp.OFPIT_APPLY_ACTIONS,
-        [p.OFPActionOutput(ofp.OFPP_CONTROLLER, ofp.OFPCML_NO_BUFFER)]
-    )])
+                    instructions=[p.OFPInstructionActions(
+                        ofp.OFPIT_APPLY_ACTIONS,
+                        [p.OFPActionOutput(ofp.OFPP_CONTROLLER, ofp.OFPCML_NO_BUFFER)]
+                    )])
 dp.send_msg(miss)
 
 ```
 
 ---
 
+| 구성 요소 | 의미 |
+| --- | --- |
+| `OFPFlowMod` | 스위치에 플로우 엔트리를 추가/수정/삭제하는 **OpenFlow 메시지** 클래스 |
+| `datapath=dp` | 연결된 스위치 객체 (Ryu가 스위치마다 관리하는 핸들) |
+| `priority=0` | **가장 낮은 우선순위** — 다른 플로우에 매칭되지 않을 때만 실행됨 |
+| `match=p.OFPMatch()` | 조건 없음(빈 매치) → 모든 패킷을 의미 |
+| `OFPIT_APPLY_ACTIONS` | 해당 패킷에 즉시 실행할 액션 집합을 지정 |
+| `OFPActionOutput(ofp.OFPP_CONTROLLER, ofp.OFPCML_NO_BUFFER)` | 매칭되지 않은 패킷을 **컨트롤러로 전송**하라는 액션 |
+| `dp.send_msg(miss)` | 실제로 OpenFlow 메시지를 스위치로 전송 |
+
+---
+
+### 동작
+
+- 스위치가 컨트롤러에 처음 연결되면
+    - `@set_ev_cls(EventOFPSwitchFeatures, CONFIG_DISPATCHER)` 호출 시점
+    - 기본 플로우(rule) 설치
+- 이후 스위치에서 어떤 패킷이 들어왔는데 **규칙과 매칭되지 않으면**
+    - 그 패킷은 **Packet-In 메시지로 컨트롤러로 전송**됨
+    - 컨트롤러는 이 패킷을 분석하고, 적절한 **새 플로우(FlowMod)** 를 내려서 학습 포워딩을 수행
+
+---
+
+- table-miss flow를 추가하지 않으면, 스위치는 매칭되지 않은 패킷을 그냥 **drop** 하므로 컨트롤러 입장에서는 아무 `packet_in` 이벤트도 발생하지 않음
+
+---
+
+- 스위치가 처음 연결될 때 자동으로 한 번만 실행
+    - **table-miss → packet_in → flow_mod 과정**
+
+| 항목 | 설명 |
+| --- | --- |
+| 목적 | 매칭되지 않은 패킷을 컨트롤러로 보내도록 설정 |
+| 우선순위 | 0 (가장 낮음) |
+| 동작 | 컨트롤러로 `packet_in` 전송 |
+| 역할 | OpenFlow 스위치의 **기본 동작 정의** |
+| 없을 경우 | 컨트롤러가 어떤 패킷도 수신하지 못함 |
+
+## Ryu/OVS에서 **SFC(Service Function Chaining)** 구현
+
+ 
+
+- 특정 트래픽(h1 → h2)을 **방화벽(fw) → NAT → 목적지(h2)** 순서로 강제 통과시키는 흐름을 만드는 플로우 룰
+
+---
+
+```python
+# === SFC: h1 → fw → nat → h2 (정방향) ===
+# h1에서 들어오면 fw로
+dp.send_msg(p.OFPFlowMod(
+    datapath=dp, priority=100,
+    match=p.OFPMatch(in_port=self.P_H1),
+    instructions=[p.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS,
+                                          [p.OFPActionOutput(self.P_FW)])]
+))
+
+```
+
+| 요소 | 의미 |
+| --- | --- |
+| `priority=100` | table-miss(0)보다 높은 우선순위 → **정책 트래픽 우선 처리** |
+| `match=p.OFPMatch(in_port=self.P_H1)` | **h1 포트에서 들어온 패킷만** 매칭 |
+| `OFPActionOutput(self.P_FW)` | 패킷을 **FW 포트로 강제 포워딩** |
+- h1에서 들어온 패킷은 모두 방화벽(fw)로 먼저 보냄
+    - 이 플로우는 **경로 제어 (Traffic Steering)** 정책이며, 일반적인 스위치의 L2/L3 포워딩과 다르게, **정해진 중간 기능 노드(FW, NAT)를 거치도록 명시적으로 지정**하는 SFC 방식
+
+---
+
+## 서비스 경로
+
+- 반대 방향(h2 → NAT → FW → h1) 별도 플로우로 설정
+
+```
+h1  →  FW  →  NAT  →  h2
+
+```
+
+---
+
+## 플로우 설정 이유
+
+- 기본 스위칭이면 트래픽은 바로 h1→h2 로 진행
+- 하지만 SFC는 **보안/정책 수행을 위해**
+    - 처음엔 **FW 통과**
+    - 그다음 **NAT 통과**
+    - 마지막에 목적지 전달
+- **중간 서비스 처리(booster, DPI, IDS, NAT 등)** 를 수행하기 위한 논리 경로
+
+---
+
+## 전체 체인 구성
+
+- 6개의 FlowMod로 **양방향 SFC**가 설정됨
+
+| 방향 | 룰 |
+| --- | --- |
+| h1 → fw | 위 코드 |
+| fw → nat | `in_port=FW → out_port=NAT` |
+| nat → h2 | `in_port=NAT → out_port=H2` |
+| h2 → nat | `in_port=H2 → out_port=NAT` |
+| nat → fw | `in_port=NAT → out_port=FW` |
+| fw → h1 | `in_port=FW → out_port=H1` |
+
+| 항목 | 설명 |
+| --- | --- |
+| 기능 | SFC(Service Function Chain) 강제 경로 설정 |
+| 역할 | h1 트래픽 → FW로 우선 이동 |
+| 매칭 | `in_port = H1` |
+| 액션 | Output to FW port |
+| 우선순위 | 100 (정책 트래픽 우선) |
+
 ### 서비스 체인 경로 (정방향: h1 → fw → nat → h2)
 
-- 각 포트의 입력에 따라 출력 포트를 지정하여 체인 순서를 강제합니다.
+- 각 포트의 입력에 따라 출력 포트를 지정하여 체인 순서를 강제
 
 | 입력 포트 | 출력 포트 | 설명 |
 | --- | --- | --- |
@@ -1174,14 +1509,12 @@ actions = [p.OFPActionOutput(self.P_H2)]
 
 ---
 
----
-
 # 주요 이벤트
 
 - Ryu(OpenFlow 1.3)에서 자주 쓰는 이벤트들
-    - **언제 발생하는지 / 무엇에 쓰는지**
+    - **발생 시점 / 용도**
 
-| 이벤트 | 언제 발생? | 대표 용도 | 디스패처 단계 |
+| 이벤트 | 발생 시점 | 대표 용도 | 디스패처 단계 |
 | --- | --- | --- | --- |
 | `EventOFPPacketIn` | 위치가 매치 실패/`send_to_controller`로 패킷을 올릴 때 | 러닝/프록시/ARP 처리, 학습 스위칭 | `MAIN_DISPATCHER` |
 | `EventOFPPortStatus` | 포트 UP/DOWN/ADD/DEL 등 상태 변화 | 링크 감지, 재라우팅 | `MAIN_DISPATCHER` |
@@ -1327,8 +1660,6 @@ class EventExamples(app_manager.RyuApp):
 
 ---
 
----
-
 ## 테이블 미스 플로우 생성
 
 - **Ryu 컨트롤러에서 테이블 미스(table miss)시 패킷을 컨트롤러로 보내도록 설정**
@@ -1391,10 +1722,6 @@ dp.send_msg(miss)
 
 ---
 
----
-
----
-
 ## ARP 패킷 처리 코드
 
 - Ryu 앱이 스위치에게 ARP 패킷은 컨트롤러로 보내라는 규칙을 추가하는 코드
@@ -1454,74 +1781,3 @@ dp.send_msg(p.OFPFlowMod(
 | h1이 `h2`의 MAC을 모르고 ARP Request 보냄 | 스위치가 `eth_type=0x0806` 규칙에 매칭됨 | 컨트롤러(Ryu)에게 PacketIn 이벤트 발생 |
 | 컨트롤러(Ryu 앱) | `handle_arp()` 같은 함수에서 ARP를 직접 응답하거나 flood 제어 | 네트워크가 중앙 제어로 ARP 처리 |
 | IPv4 패킷 (eth_type=0x0800) | 별도 규칙이 없으면 Drop | 불필요한 flooding 방지 |
-
-
-# [9] SDN + NFV
-
-- **NFV**
-    - `fw`, `nat` 같은 **네트워크 기능을 범용 서버(호스트)에서 실행**
-- **SDN**
-    - Ryu가 **서비스 체인 경로**를 **동적으로 설치/변경**
-    - 체인에 IDS를 추가하려면 스위치 플로우만 갱신
-
----
-
-## **NFV 시나리오**
-
-- `ping`은 **정상 통과**, `wget`은 **"blocked (fw)"** 로 막힘
-- `ping`은 **정상 통과**, `wget`은 **"blocked (fw)"** 로 막힘
-- **정상적으로 동작 중인 NFV 시나리오**
-
----
-
-## 네트워크
-
-| 구간 | 설명 |
-| --- | --- |
-| `h1 → h2` ping 성공 | **Ryu SDN Controller**가 설정한 SFC(서비스 체인) 경로를 따라, `fw → nat`을 거쳐 ICMP 패킷 전달됨 |
-| `h1 → h2` HTTP(포트 80) 실패 | `fw` 호스트(VNF)의 **iptables 룰**이 `tcp dport 80` 트래픽을 드롭시켜 **방화벽 정책이 동작함** |
-| 출력 `blocked (fw)` | 스크립트에서 의도한 차단 메시지 ( |
-
----
-
-## 구성
-
-```
-h1 --> [SDN Switch s1] --> [VNF: fw] --> [VNF: nat] --> [h2]
-
-```
-
-| 구성 요소 | 역할 | 기술 |
-| --- | --- | --- |
-| **Ryu 컨트롤러 (ryu_sfc.py)** | SDN 제어 평면 | 트래픽을 `fw → nat` 경로로 우회 |
-| **fw (VNF 1)** | 방화벽 기능 수행 | iptables로 TCP/80 차단 |
-| **nat (VNF 2)** | NAT 기능 수행 | iptables SNAT |
-| **Mininet + OVS** | 데이터 평면 | 패킷 포워딩 및 가상 링크 |
-
----
-
-1. **fw의 방화벽 정책 확인**
-    - TCP/80 DROP 룰이 존재
-    
-    ```bash
-    mininet> fw iptables -L -n --line-numbers
-    
-    ```
-    
-2. **nat의 SNAT 기능 검증**
-    - 캡처된 패킷의 **src IP = 10.0.0.254**이면 NAT 작동 중입니다.
-    
-    ```bash
-    mininet> h2 tcpdump -i h2-eth0 -n -c 3 &
-    mininet> h1 ping -c 1 10.0.0.2
-    
-    ```
-    
-3. **Ryu의 플로우 테이블 보기**
-    - `in_port=1 actions=output:2` → `in_port=2 actions=output:3` → `in_port=3 actions=output:4` 순서 확인.
-  
-    ```bash
-    mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
-    
-    ```
-
