@@ -553,7 +553,6 @@ state: LINK_DOWN
 
 ---
 
----
 
 - `OFPST_PORT_DESC reply`에 나오는 MAC 주소는 스위치의 각 포트가 가진 MAC 주소이지, 연결된 **호스트나 다른 장치의 MAC**은 아님
 
