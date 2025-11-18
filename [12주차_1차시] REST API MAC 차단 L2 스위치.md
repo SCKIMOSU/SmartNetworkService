@@ -278,11 +278,11 @@ curl http://127.0.0.1:8080/macblock/macs
 
 - 실행 화면
 
-![sdn.png](restMAC1.png)
+![restMAC.png](restMAC1.png)
 
 - 응답 화면
 
-![sdn.png](restMAC2.png)
+![restMAC.png](restMAC2.png)
 
 ### MAC 차단 추가 (POST)
 
@@ -297,7 +297,7 @@ curl -X POST http://127.0.0.1:8080/macblock/macs \
 
 - 실행화면
     
-    ![sdn.png](restMAC3.png)
+    ![restMAC.png](restMAC3.png)
     
 - 응답
 
@@ -311,7 +311,7 @@ curl -X POST http://127.0.0.1:8080/macblock/macs \
 
 - 컨트롤러 로그 화면
 
-![sdn.png](restMAC4.png)
+![restMAC.png](restMAC4.png)
 
 ---
 
@@ -326,11 +326,11 @@ curl -X DELETE http://127.0.0.1:8080/macblock/macs/00:00:00:00:00:01
 
 - 실행 화면
 
-![sdn.png](restMAC5.png)
+![restMAC.png](restMAC5.png)
 
 - 컨트롤러 로그 응답 화면
 
-![sdn.png](restMAC6.png)
+![restMAC.png](restMAC6.png)
 
 ---
 
@@ -347,11 +347,11 @@ sudo mn --controller=remote,ip=127.0.0.1,port=6653 \
 
 - 실행화면
 
-![sdn.png](restMAC7.png)
+![restMAC.png](restMAC7.png)
 
 - 컨트롤러 로그 응답 화면
 
-![sdn.png](restMAC8.png)
+![restMAC.png](restMAC8.png)
 
 ### REST 방식 h1 MAC 차단
 
@@ -364,11 +364,11 @@ curl -X POST http://127.0.0.1:8080/macblock/macs \
 
 - 명령
     
-    ![sdn.png](restMAC9.png)
+    ![restMAC.png](restMAC9.png)
     
 - 컨트롤러 로그 응답 화면
     
-    ![sdn.png](restMAC10.png)
+    ![restMAC.png](restMAC10.png)
     
     ### Mininet 에서 차단 확인
     
@@ -1011,34 +1011,34 @@ ryu-manager mac_block_rest.py --wsapi-port 8080
 
 ### Ryu 실행 화면
 
-![sdn.png](restMAC11.png)
+![restMAC.png](restMAC11.png)
 
 ### 차단 목록 조회 화면
 
-![sdn.png](restMAC12.png)
+![restMAC.png](restMAC12.png)
 
 ### 컨트롤러 화면
 
-![sdn.png](restMAC13.png)
+![restMAC.png](restMAC13.png)
 
 ### REST MAC 추가
 
-![sdn.png](restMAC14.png)
+![restMAC.png](restMAC14.png)
 
 ### REST MAC 삭제
 
-![sdn.png](restMAC15.png)
+![restMAC.png](restMAC15.png)
 
 ### 컨트롤러 화면
 
-![sdn.png](restMAC16.png)
+![restMAC.png](restMAC16.png)
 
 ### **h1의 인터페이스 MAC 주소 (`12:8b:18:61:e2:ba`) 이용 추가/삭제하는 코드**
 
 - h1 ifconfig 로 h1 MAC 주소 파악
     - ether 12:8b:18:61:e2:ba
         
-        ![sdn.png](restMAC17.png)
+        ![restMAC.png](restMAC17.png)
         
 
 ```bash
@@ -1070,15 +1070,15 @@ curl -X POST http://127.0.0.1:8080/macblock/macs \
 
 ```
 
-![sdn.png](restMAC18.png)
+![restMAC.png](restMAC18.png)
 
 ### 미니넷 확인
 
-![sdn.png](restMAC19.png)
+![restMAC.png](restMAC19.png)
 
 ### 컨트롤러 확인
 
-![sdn.png](restMAC20.png)
+![restMAC.png](restMAC20.png)
 
 ### `DELETE /macblock/macs/{mac}`  삭제 (차단 해제)
 
@@ -1089,19 +1089,19 @@ curl -X DELETE http://127.0.0.1:8080/macblock/macs/**12:8b:18:61:e2:ba**
 
 ### 명령 터미널에서 명령어 입력
 
-![sdn.png](restMAC21.png)
+![restMAC.png](restMAC21.png)
 
 ### 컨트롤러 확인
 
-![sdn.png](restMAC22.png)
+![restMAC.png](restMAC22.png)
 
 ### 미니넷 화면
 
-![sdn.png](restMAC23.png)
+![restMAC.png](restMAC23.png)
 
 ### 컨트롤러 화면
 
-![sdn.png](restMAC24.png)
+![restMAC.png](restMAC24.png)
 
 - OpenFlow 포트(6653)는 **스위치–컨트롤러 통신용**
 - REST는 **WSGI 포트(기본 8080)** 에서 서비스됨
