@@ -9,10 +9,18 @@
 
 ---
 
-```python
+```markup
+# mac_block_rest.py
+# Ryu MAC Block + REST + 즉시 DROP / UNBLOCK 시 DROP 삭제 버전
+
 from ryu.base import app_manager
 from ryu.controller import ofp_event
-from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, set_ev_cls
+from ryu.controller.handler import (
+    MAIN_DISPATCHER,
+    CONFIG_DISPATCHER,
+    DEAD_DISPATCHER,
+    set_ev_cls
+)
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
@@ -22,9 +30,9 @@ from ryu.app.wsgi import WSGIApplication, ControllerBase, route
 from webob import Response
 import json
 
-MACBLOCK_INSTANCE_NAME = 'mac_block_app'
+MACBLOCK_INSTANCE_NAME = 'mac_block_app_with_delete'
 
-class MacBlockSwitch(app_manager.RyuApp):
+class MacBlockSwitchWithDelete(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     # WSGI 컨텍스트를 생성해 달라고 Ryu에 요청
@@ -33,14 +41,29 @@ class MacBlockSwitch(app_manager.RyuApp):
     }
 
     def __init__(self, *args, **kwargs):
-        super(MacBlockSwitch, self).__init__(*args, **kwargs)
+        super(MacBlockSwitchWithDelete, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
         self.blocked_macs = set()
+        self.datapaths = {}  # 각 스위치 datapath 관리
 
         # Ryu가 생성한 WSGI 인스턴스
         wsgi = kwargs['wsgi']
         # REST 컨트롤러 등록
-        wsgi.register(MacBlockController, {MACBLOCK_INSTANCE_NAME: self})
+        wsgi.register(MacBlockControllerWithDelete, {MACBLOCK_INSTANCE_NAME: self})
+
+    # =========================
+    #   스위치 상태 변화 감지
+    # =========================
+    @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
+    def _state_change_handler(self, ev):
+        datapath = ev.datapath
+        if ev.state == MAIN_DISPATCHER:
+            self.datapaths[datapath.id] = datapath
+            self.logger.info("Datapath %s connected", datapath.id)
+        elif ev.state == DEAD_DISPATCHER:
+            if datapath.id in self.datapaths:
+                del self.datapaths[datapath.id]
+                self.logger.info("Datapath %s disconnected", datapath.id)
 
     # =========================
     #   OpenFlow 기본 설정
@@ -85,6 +108,79 @@ class MacBlockSwitch(app_manager.RyuApp):
         datapath.send_msg(mod)
 
     # =========================
+    #   특정 MAC DROP flow 설치
+    # =========================
+    def install_block_flows(self, mac):
+        """
+        주어진 MAC 주소에 대해 **즉시** DROP flow 설치.
+        - priority=200 (L2 learning flow(priority=1)보다 높음)
+        - eth_src=mac 또는 eth_dst=mac
+        """
+        for dp in self.datapaths.values():
+            ofproto = dp.ofproto
+            parser = dp.ofproto_parser
+
+            # src 기준 DROP
+            match_src = parser.OFPMatch(eth_src=mac)
+            self.add_flow(datapath=dp,
+                          priority=200,
+                          match=match_src,
+                          actions=[],           # actions 없으면 DROP
+                          idle_timeout=0,
+                          hard_timeout=0)
+
+            # dst 기준 DROP
+            match_dst = parser.OFPMatch(eth_dst=mac)
+            self.add_flow(datapath=dp,
+                          priority=200,
+                          match=match_dst,
+                          actions=[],
+                          idle_timeout=0,
+                          hard_timeout=0)
+
+        self.logger.info("Installed block flows for MAC %s", mac)
+
+    # =========================
+    #   특정 MAC DROP flow 삭제
+    # =========================
+    def remove_block_flows(self, mac):
+        """
+        주어진 MAC 주소에 대해 설치된 DROP flow 삭제
+        - priority=200, eth_src/eth_dst=mac 매치 삭제
+        """
+        for dp in self.datapaths.values():
+            ofproto = dp.ofproto
+            parser = dp.ofproto_parser
+
+            # src 기준 DROP flow 삭제
+            match_src = parser.OFPMatch(eth_src=mac)
+            mod_src = parser.OFPFlowMod(
+                datapath=dp,
+                table_id=ofproto.OFPTT_ALL,
+                command=ofproto.OFPFC_DELETE,
+                out_port=ofproto.OFPP_ANY,
+                out_group=ofproto.OFPG_ANY,
+                priority=200,
+                match=match_src
+            )
+            dp.send_msg(mod_src)
+
+            # dst 기준 DROP flow 삭제
+            match_dst = parser.OFPMatch(eth_dst=mac)
+            mod_dst = parser.OFPFlowMod(
+                datapath=dp,
+                table_id=ofproto.OFPTT_ALL,
+                command=ofproto.OFPFC_DELETE,
+                out_port=ofproto.OFPP_ANY,
+                out_group=ofproto.OFPG_ANY,
+                priority=200,
+                match=match_dst
+            )
+            dp.send_msg(mod_dst)
+
+        self.logger.info("Removed block flows for MAC %s", mac)
+
+    # =========================
     #   Packet-In 처리
     # =========================
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
@@ -118,16 +214,16 @@ class MacBlockSwitch(app_manager.RyuApp):
         if src in self.blocked_macs or dst in self.blocked_macs:
             self.logger.info("BLOCKED MAC detected. Dropping packet (src=%s, dst=%s)", src, dst)
 
+            # Packet-In 단계에서도 혹시 모를 트래픽에 대해 DROP flow 한 번 더 설치 (보강)
             if src in self.blocked_macs:
                 match = parser.OFPMatch(eth_src=src)
             else:
                 match = parser.OFPMatch(eth_dst=dst)
 
-            # DROP flow (actions = [])
             self.add_flow(datapath,
-                          priority=100,
+                          priority=200,
                           match=match,
-                          actions=[],
+                          actions=[],           # DROP
                           buffer_id=msg.buffer_id,
                           idle_timeout=60)
             return
@@ -175,10 +271,10 @@ class MacBlockSwitch(app_manager.RyuApp):
 #   REST API Controller
 # =======================
 
-class MacBlockController(ControllerBase):
+class MacBlockControllerWithDelete(ControllerBase):
 
     def __init__(self, req, link, data, **config):
-        super(MacBlockController, self).__init__(req, link, data, **config)
+        super(MacBlockControllerWithDelete, self).__init__(req, link, data, **config)
         # RyuApp 인스턴스
         self.mac_app = data[MACBLOCK_INSTANCE_NAME]
 
@@ -196,7 +292,7 @@ class MacBlockController(ControllerBase):
         try:
             content = req.body.decode('utf-8')
             data = json.loads(content)
-            mac = data.get('mac', '').lower()
+            mac = data.get('mac', '').lower().strip()   # 공백 제거
         except Exception:
             return self._json_response(
                 {"error": "invalid JSON. expected {\"mac\": \"xx:xx:xx:xx:xx:xx\"}"},
@@ -209,6 +305,9 @@ class MacBlockController(ControllerBase):
         self.mac_app.blocked_macs.add(mac)
         self.mac_app.logger.info("REST: Added blocked MAC %s", mac)
 
+        # 바로 DROP flow 설치
+        self.mac_app.install_block_flows(mac)
+
         return self._json_response({
             "result": "ok",
             "blocked_macs": sorted(list(self.mac_app.blocked_macs))
@@ -217,10 +316,14 @@ class MacBlockController(ControllerBase):
     # MAC 차단 해제 (DELETE)
     @route('macblock', '/macblock/macs/{mac}', methods=['DELETE'])
     def delete_blocked_mac(self, req, mac, **kwargs):
-        mac = mac.lower()
+        mac = mac.lower().strip()
         if mac in self.mac_app.blocked_macs:
             self.mac_app.blocked_macs.remove(mac)
             self.mac_app.logger.info("REST: Removed blocked MAC %s", mac)
+
+            # 스위치에 설치된 해당 MAC DROP flow 삭제
+            self.mac_app.remove_block_flows(mac)
+
             return self._json_response({
                 "result": "ok",
                 "blocked_macs": sorted(list(self.mac_app.blocked_macs))
@@ -244,7 +347,288 @@ class MacBlockController(ControllerBase):
 
 ```
 
+## **Ryu 스위치 앱 (MacBlockSwitchWithDelete)과 REST API 서버 (MacBlockControllerWithDelete)**
+
+- `POST /macblock/macs`
+    - MAC 주소를 **차단 목록 + 스위치 DROP flow 설치**
+- `DELETE /macblock/macs/{mac}`
+    - MAC 주소를 **차단 해제 + 스위치 DROP flow 삭제**
+- `GET /macblock/macs`
+    - 현재 차단된 MAC 리스트 조회
+
 ---
+
+## 클래스
+
+- WSGI(REST 컨트롤러)와 RyuApp 인스턴스를 연결할 때 사용할 이름
+- REST 컨트롤러에서 `data[MACBLOCK_INSTANCE_NAME]` 로 RyuApp 객체를 받음.
+
+```python
+MACBLOCK_INSTANCE_NAME = 'mac_block_app_with_delete'
+
+```
+
+---
+
+## `MacBlockSwitchWithDelete` – Ryu 스위치 앱
+
+```python
+class MacBlockSwitchWithDelete(app_manager.RyuApp):
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+    _CONTEXTS = {
+        'wsgi': WSGIApplication,
+    }
+
+```
+
+- `RyuApp` 상속
+    - Ryu 컨트롤러에 의해 실행되는 앱
+- `OFP_VERSIONS` : OpenFlow 1.3 사용
+- `_CONTEXTS`
+    - Ryu에게 “WSGIApplication 인스턴스 하나 만들어줘” 라고 요청 → REST 서버로 사용
+
+```python
+def __init__(...):
+    self.mac_to_port = {}
+    self.blocked_macs = set()
+    self.datapaths = {}
+    wsgi = kwargs['wsgi']
+    wsgi.register(MacBlockControllerWithDelete, {MACBLOCK_INSTANCE_NAME: self})
+
+```
+
+- `mac_to_port` : L2 스위치처럼 MAC → 포트 학습용
+- `blocked_macs` : 차단된 MAC 주소 set
+- `datapaths` : 연결된 스위치 목록 (`dpid → datapath 객체`)
+- `wsgi.register` : REST 컨트롤러 클래스를 등록하고, `data` 딕셔너리에 `self`를 넣음
+
+---
+
+### 3-1. 스위치 연결/해제 감지
+
+```python
+@set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
+def _state_change_handler(self, ev):
+    ...
+
+```
+
+- 스위치가 Ryu에 붙거나(connected) 끊겼을 때 호출
+- `MAIN_DISPATCHER` 상태 → `self.datapaths[dpid] = datapath`
+- `DEAD_DISPATCHER` 상태 → `datapaths` 에서 제거
+    - 나중에 **모든 스위치에 drop flow 설치/삭제** 할 때 이 목록 사용
+
+---
+
+### 3-2. 스위치 기본 Flow 설정
+
+```python
+@set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+def switch_features_handler(self, ev):
+    match = parser.OFPMatch()
+    actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
+                                      ofproto.OFPCML_NO_BUFFER)]
+    self.add_flow(datapath, priority=0, match=match, actions=actions)
+
+```
+
+- 스위치가 처음 연결될 때 자동 실행
+- “모든 패킷을 컨트롤러로 보내라” 는 기본 룰(priority=0) 설치
+- 나머지 flow 는 컨트롤러에서 학습해서 추가
+
+---
+
+### 3-3. 공통 Flow 추가 함수 `add_flow`
+
+```python
+def add_flow(self, datapath, priority, match, actions, ...):
+    inst = [parser.OFPInstructionActions(...)]
+    mod = parser.OFPFlowMod(..., priority=priority, match=match, instructions=inst)
+    datapath.send_msg(mod)
+
+```
+
+- match & actions 를 받아서 **FlowMod 메시지 작성 후 스위치에 전송**
+- `actions=[]` 면 → 실제로는 DROP 룰이 됨 (아무 행동도 안 함)
+
+---
+
+### 3-4. 차단용 DROP flow 설치 – `install_block_flows`
+
+```python
+def install_block_flows(self, mac):
+    for dp in self.datapaths.values():
+        match_src = parser.OFPMatch(eth_src=mac)
+        self.add_flow(dp, priority=200, match=match_src, actions=[], ...)
+
+        match_dst = parser.OFPMatch(eth_dst=mac)
+        self.add_flow(dp, priority=200, match=match_dst, actions=[], ...)
+
+```
+
+- **POST /macblock/macs** 로 MAC 이 추가될 때 호출
+- 현재 연결된 모든 스위치에 대해
+    - `eth_src=mac` 인 패킷 DROP
+    - `eth_dst=mac` 인 패킷 DROP
+- priority=200 으로, 기존 학습 flow(priority=1) 보다 항상 우선
+    - 기존에 허용 flow 가 깔려 있어도 새로 설치된 drop flow 가 우선 적용되어 트래픽이 막힘
+
+---
+
+### 3-5. 차단용 DROP flow 삭제 – `remove_block_flows`
+
+```python
+def remove_block_flows(self, mac):
+    for dp in self.datapaths.values():
+        match_src = parser.OFPMatch(eth_src=mac)
+        mod_src = parser.OFPFlowMod(
+            datapath=dp,
+            table_id=ofproto.OFPTT_ALL,
+            command=ofproto.OFPFC_DELETE,
+            out_port=ofproto.OFPP_ANY,
+            out_group=ofproto.OFPG_ANY,
+            priority=200,
+            match=match_src
+        )
+        dp.send_msg(mod_src)
+        ...
+
+```
+
+- **DELETE /macblock/macs/{mac}** 요청 시 호출
+- priority=200, `eth_src=mac` 또는 `eth_dst=mac` 인 flow 를 모두 삭제
+
+---
+
+### 3-6. 패킷 처리 – `_packet_in_handler`
+
+```python
+@set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+def _packet_in_handler(self, ev):
+    pkt = packet.Packet(msg.data)
+    eth = pkt.get_protocols(ethernet.ethernet)[0]
+    src = eth.src.lower()
+    dst = eth.dst.lower()
+
+```
+
+- 패킷 정보 파싱 (src MAC, dst MAC 등)
+- IPv6 멀티캐스트, LLDP 는 무시
+
+```python
+if src in self.blocked_macs or dst in self.blocked_macs:
+    # 여기서도 보강 차원에서 drop flow 설치
+    self.add_flow(datapath, priority=200, match=match, actions=[], ...)
+    return
+
+```
+
+- 만약 이 패킷의 src/dst 가 block 리스트에 있으면
+    - 다시 한 번 drop flow 설치(보강) 후
+    - 이 패킷은 그냥 버림 (return)
+
+```python
+# L2 learning
+self.mac_to_port.setdefault(dpid, {})
+self.mac_to_port[dpid][src] = in_port
+
+if dst in self.mac_to_port[dpid]:
+    out_port = self.mac_to_port[dpid][dst]
+else:
+    out_port = ofproto.OFPP_FLOOD
+
+```
+
+- block 아니면 L2 스위칭처럼 MAC → 포트 학습
+- 목적지 MAC 이 학습되어 있으면 unicast, 아니면 flood
+
+```python
+if out_port != ofproto.OFPP_FLOOD:
+    match = parser.OFPMatch(in_port=in_port, eth_src=src, eth_dst=dst)
+    self.add_flow(... priority=1, actions=actions ...)
+
+```
+
+- unicast 인 경우: 동일 흐름에 대해 다음부터는 스위치가 자체 처리하도록
+    
+    → priority=1 flow 설치 (성능 향상)
+    
+
+---
+
+## `MacBlockControllerWithDelete` – REST API
+
+```python
+class MacBlockControllerWithDelete(ControllerBase):
+    def __init__(...):
+        self.mac_app = data[MACBLOCK_INSTANCE_NAME]
+
+```
+
+- WSGI 라우팅 담당 컨트롤러
+- `self.mac_app` 으로 RyuApp 인스턴스에 접근 가능
+
+---
+
+### 4-1. GET /macblock/macs – 차단 목록 조회
+
+```python
+@route('macblock', '/macblock/macs', methods=['GET'])
+def list_blocked_macs(self, req, **kwargs):
+    body = {"blocked_macs": sorted(list(self.mac_app.blocked_macs))}
+    return self._json_response(body)
+
+```
+
+- 현재 `blocked_macs` set 내용을 정렬해서 JSON 응답
+
+---
+
+### 4-2. POST /macblock/macs – MAC 차단 추가
+
+```python
+@route('macblock', '/macblock/macs', methods=['POST'])
+def add_blocked_mac(self, req, **kwargs):
+    content = req.body.decode('utf-8')
+    data = json.loads(content)
+    mac = data.get('mac', '').lower().strip()
+
+```
+
+- HTTP body 를 JSON 으로 파싱
+- `"mac"` 필드 읽어서 소문자 + 양 끝 공백 제거
+
+```python
+self.mac_app.blocked_macs.add(mac)
+self.mac_app.install_block_flows(mac)
+
+```
+
+- RyuApp 의 `blocked_macs` set 에 추가
+- 즉시 `install_block_flows(mac)` 호출 → 스위치에 drop flow 설치
+    - **POST 한 직후부터 ping 이 막히게 됨**
+
+---
+
+### 4-3. DELETE /macblock/macs/{mac} – MAC 차단 해제
+
+```python
+@route('macblock', '/macblock/macs/{mac}', methods=['DELETE'])
+def delete_blocked_mac(self, req, mac, **kwargs):
+    mac = mac.lower().strip()
+    if mac in self.mac_app.blocked_macs:
+        self.mac_app.blocked_macs.remove(mac)
+        self.mac_app.remove_block_flows(mac)
+
+```
+
+- URL path 에서 `{mac}` 를 받아옴
+- 다시 소문자 + strip 해서 비교
+- set 에 있으면 삭제하고, `remove_block_flows` 로 스위치 drop flow 제거
+
+---
+
 
 ### REST API 서버 구동 확인
 
