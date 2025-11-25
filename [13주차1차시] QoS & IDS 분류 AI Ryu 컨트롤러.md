@@ -46,7 +46,7 @@
             | 네트워크 위치 | 미러링된 트래픽을 읽음 | 트래픽 경로 중간에서 즉시 차단 가능 |
             | 예시 | Snort IDS | Suricata, Palo Alto IPS |
             
-            ---
+
             
             - SDN + AI로 구현
                 - AI 모델이 attack이라고 판단하면
@@ -61,9 +61,6 @@
                 actions = []  # DROP
                 self.logger.info("[POLICY] DROP attack traffic from %s", src_ip)
             
-            ```
-            
-           
 
 ---
 
