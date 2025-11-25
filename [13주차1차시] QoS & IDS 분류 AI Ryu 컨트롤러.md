@@ -1,5 +1,111 @@
 # QoS(트래픽 분류) 및 IDS(공격 탐지) 분류 AI Ryu 컨트롤러
 
+## **SDN + Ryu + AI + Mininet 프로젝트 구조**
+
+- **h1 트래픽 생성(send_ai_traffic.py)**
+- **OpenFlow 스위치 table-miss → PacketIn**
+- **Ryu 컨트롤러(app_ai_ryu.py)에서 ARP 처리 / AI 분석**
+- **AI 모델(model.pkl) 예측 및 정책 적용**
+- **FlowMod + PacketOut**
+- **h2 전달**
+
+---
+
+```mermaid
+flowchart TD
+
+    subgraph Host1
+        A1[send_ai_traffic.py 실행]
+        A2[ARP Request]
+        A3[TCP/UDP 패킷 전송]
+    end
+
+    subgraph Switch
+        S1[Flow Table Lookup]
+        S2{Rule Match?}
+        S3[PacketIn → Ryu]
+        S4[FlowMod Install]
+        S5[스위치에서 패킷 처리]
+    end
+
+    subgraph Controller
+        C1[Packet Parsing]
+        C2{ARP Packet?}
+        C3[ARP Flood 처리]
+        C4[Feature 추출]
+        C5[AI 예측]
+        C6{Class 분류}
+        C7[NORMAL → flood]
+        C8[P2P → low-prio flood]
+        C9[VIDEO → port 2]
+        C10[ATTACK → drop]
+        C11[FlowMod Install]
+        C12[PacketOut]
+    end
+
+    subgraph Host2
+        H2[패킷 수신]
+    end
+
+    A1 --> A2
+    A2 --> S1
+    A3 --> S1
+
+    S1 --> S2
+    S2 -- No --> S3
+    S2 -- Yes --> S5
+
+    S3 --> C1
+    C1 --> C2
+
+    C2 -- Yes --> C3 --> C12 --> S5 --> H2
+
+    C2 -- No --> C4 --> C5 --> C6
+
+    C6 -- normal --> C7 --> C11
+    C6 -- p2p --> C8 --> C11
+    C6 -- video --> C9 --> C11
+    C6 -- attack --> C10 --> C11
+
+    C11 --> S4 --> S5 --> H2
+    C12 --> H2
+
+```
+
+---
+
+### **1. h1 (송신자)**
+
+- send_ai_traffic.py 실행
+- normal/p2p/video/attack 패킷 생성
+- ARP 필요 시 ARP Request 발송
+- TCP/UDP 패킷 전송
+
+### **2. OpenFlow Switch**
+
+- Flow Table 룰 없으면 → PacketIn 발생
+- Ryu로 패킷 전달
+- Ryu가 FlowMod 설치하면 자동 처리
+
+### **3. Ryu Controller (AI 적용 핵심)**
+
+- ARP 패킷이면 Flood
+- IPv4 패킷이면 feature 추출
+- model.pkl 기반 AI 예측
+- 클래스별 정책 적용 (drop / flood / port2)
+
+### **4. FlowMod + PacketOut**
+
+- Rule 설치하여 스위치를 SDN 기반 라우터로 변경
+- PacketOut으로 즉시 처리
+- 다음 동일 트래픽은 PacketIn 없이 자동 처리
+
+### **5. h2 (수신자)**
+
+- 최종 트래픽 도착
+
+---
+
 ### **normal**
 
 - 일반 웹/일반 트래픽
@@ -45,9 +151,6 @@
             | 처리 | 경고(Alert)만 함 | 정책에 따라 DROP, BLOCK 수행 |
             | 네트워크 위치 | 미러링된 트래픽을 읽음 | 트래픽 경로 중간에서 즉시 차단 가능 |
             | 예시 | Snort IDS | Suricata, Palo Alto IPS |
-            
-
-            
             - SDN + AI로 구현
                 - AI 모델이 attack이라고 판단하면
                 - `actions = []`
@@ -60,6 +163,8 @@
                 priority = 1000
                 actions = []  # DROP
                 self.logger.info("[POLICY] DROP attack traffic from %s", src_ip)
+            
+            ```
             
 
 ---
