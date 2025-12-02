@@ -1,0 +1,1484 @@
+# Ping 통해본 컨트롤러 학습
+
+---
+
+### 사용자 애플리케이션이 아래 명령어로  h1에게 명령함
+
+```
+mininet> h1 ping h2
+
+```
+
+### h1 운영체제(OS)
+
+- h2 MAC 주소를 알아야 Ethernet 프레임을 만들 수 있음
+- ARP Request 생성
+
+```
+이 IP 주소(10.0.0.2)와 통신해야 하네?
+MAC 주소를 알아야 Ethernet 프레임을 만들 수 있는데?
+
+```
+
+### Mininet
+
+- h2의 IP를 알고 있음
+
+```
+h2 IP = 10.0.0.2
+
+```
+
+- h1의 명령으로 전달
+
+```
+h1 ping 10.0.0.2
+
+```
+
+- h1 OS는 다음 행동을 시작함
+
+```
+나는 10.0.0.2의 MAC을 모른다 → ARP 요청
+
+```
+
+---
+
+### h1 운영체제 내부
+
+- ping 명령 수신
+    - 목적지 IP = 10.0.0.2 확인
+- h1 ARP 캐시 확인
+    - h1 캐시가 비어 있음
+    - MAC 없음
+- ARP Request 메시지 broadcast 실행
+- 응답을 받으면 ARP 캐시에 등록
+- Ethernet 프레임 생성 가능
+- ping 전송
+
+---
+
+### **Flow** Table**과 FlowMod**
+
+- **FlowMod**
+    - **명령(Command)**
+- **Flow Table**
+    - **스위치 내부에 저장되는 룰(Rule set)**
+
+---
+
+### 컨트롤러 FlowMod 메시지
+
+- **스위치에게 룰을 설치하라는 명령(OpenFlow 메시지)**
+    - 이 매칭 조건(match)과 액션(action)을 가진 룰을 추가하라
+    - 이 룰을 삭제하라
+    - 이 룰을 수정하라
+- **FlowMod 메시지**
+
+```
+FlowMod {
+    match: {}                     # 조건 없음
+    priority: 0                   # 가장 낮은 우선순위
+    instructions: [
+        APPLY-ACTIONS: [
+            OUTPUT: CONTROLLER    # 컨트롤러로 보내기
+                max_len=65535     # 전체 패킷 보내기
+        ]
+    ]
+}
+
+```
+
+### 스위치 Flow Table
+
+- **스위치 내부에 저장**
+- **룰(rule) 목록**
+
+```
+cookie=0x0, priority=1, in_port=1, eth_dst=aa:bb:cc:dd:ee:ff, actions=output:2
+
+```
+
+- match
+    - 어떤 패킷에 적용할지?
+- priority
+    - 우선순위
+- actions
+    - 매칭되면 어떻게 처리할지?
+- counters
+    - 패킷 수, 바이트 수
+- 등이 포함된 **스위치의 실제 상태(state)**
+- Flow Table 은 **스위치가 패킷을 처리할 때 참조하는 데이터 구조**
+
+---
+
+### **컨트롤러 : FlowMod 메시지 전송 → 스위치 : Flow Table에 룰을 생성**
+
+```
+FlowMod (컨트롤러 → 스위치)
+    ↓
+Flow Table (스위치 내부 룰)
+
+```
+
+- FlowMod
+    - 명령
+    - **행위(Action)**
+- Flow Table
+    - 스위치에 저장
+    - **상태(State)**
+
+---
+
+### `add_flow()` 함수가 스위치로 FlowMod 메시지를 보냄
+
+```python
+match = parser.OFPMatch(in_port=1, eth_dst="00:00:00:00:00:02")
+actions = [parser.OFPActionOutput(2)]
+self.add_flow(datapath, 1, match, actions)
+
+```
+
+### 스위치 내부
+
+- Flow Table 이 아래와 같이 바뀜
+    - FlowMod 명령어는 저장되지 않음
+    - FlowMod 명령어를 처리한 결과가 Flow Table 에 저장됨.
+
+```
+cookie=0x0, priority=1, in_port=1, eth_dst=00:00:00:00:00:02, actions=output:2
+
+```
+
+---
+
+### 컨트롤러 **MAC 학습 테이블 :** mac_to_port
+
+- 컨트롤러에서 유지하는 **MAC 학습 테이블**
+    - 학습된 MAC → 포트 대응을 기록하기 위한 **소프트웨어 테이블**
+    - **중첩 딕셔너리(dict)**
+        - **첫 번째 key**
+            - 스위치 번호 (=DPID)
+        - **두 번째 key**
+            - 호스트의 MAC 주소
+        - **value**
+            - 해당 MAC이 들어온 스위치 포트 번호
+
+```
+mac_to_port = {
+    dpid: {
+        mac_address: in_port
+    }
+}
+
+```
+
+### mac_to_port[1][00:00:00:00:00:01] = 1
+
+- 1번 스위치에서 h1(00:00:00:00:00:01)은 포트 1에 연결되어 있다
+- **첫 번째 key**
+    - [1]
+    - 스위치 번호
+- **두 번째 key**
+    - [00:00:00:00:00:01]
+    - h1의 mac 주소
+- **value**
+    - port 1을 나타냄
+
+```python
+mac_to_port[1][00:00:00:00:00:01] = 1  # [스위치 번호], [h1 MAC], 포트 번호
+
+```
+
+| 요소 | 의미 |
+| --- | --- |
+| `mac_to_port[1]` | **DPID가 1번인 스위치의 MAC 테이블** |
+| `[00:00:00:00:00:01]` | **h1의 MAC 주소** |
+| `= 1` | **MAC 00:00:00:00:00:01은 스위치의 1번 포트에서 들어왔다** |
+
+---
+
+### mac_to_port : 스위치 s1에 h1, h2가 연결되어 있으면
+
+- MAC h1
+    - 스위치 1번의 포트 1 에 연결됨
+- MAC h2
+    - 스위치 1번의 포트 2에 연결됨
+
+```python
+mac_to_port = {
+    1: {                              [스위치 번호],  
+        "00:00:00:00:00:01": 1,       [h1 MAC], 포트 번호
+        "00:00:00:00:00:02": 2        [h2 MAC], 포트 번호
+    }
+}
+
+```
+
+---
+
+## **FlowMod 명령 발생 시점**
+
+- **목적지 MAC(dst)에 대한 출구 포트(out_port)를 알고 있을 때**
+- **목적지 MAC을 가진 패킷이 처음으로 들어왔을 때**
+
+```
+dst MAC 이 mac_to_port 테이블에 존재할 때 : 존재여부는 match 로 파악
+그 dst로 향하는 패킷이 처음 들어오는 순간 → add_flow()로 FlowMod 설치
+ ****
+```
+
+---
+
+```python
+if dst in self.mac_to_port[dpid]:
+    match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
+    self.add_flow(datapath, 1, match, actions)
+
+```
+
+## **FlowMod 명령에 따른** Flow Table **설치**
+
+### 1) **ARP Request (H1 → 브로드캐스트)**
+
+- 스위치는 **H1 MAC 을 학습**
+- 목적지 MAC = ff:ff:ff:ff:ff:ff → FLOOD 해야 함
+- H2 MAC 은 아직 모름
+    - FlowMod **명령** 불가
+    - **Flow Table 설치 불가**
+
+---
+
+### 2) **ARP Reply (H2 → H1)**
+
+- 스위치는 **H2 MAC 을 학습**
+- 목적지 MAC = H1 MAC, 이미 학습된 상태
+    - 둘 다 학습됨 (H1_MAC, H2_MAC)
+    - 이 순간 조건 충족
+        - **이 때 FlowMod(H2 → H1) 명령으로 Flow Table 설치**
+
+```
+dst(H1 MAC) in mac_to_port → True
+
+```
+
+---
+
+### 3) **ICMP Echo Request (Ping H1 → H2)**
+
+- 목적지 MAC = H2 MAC
+- 스위치는 이미 H2 MAC 학습해 놓았음
+    - 조건 충족
+    - **이 때 FlowMod(H1 → H2) 명령으로 Flow Table 설치**
+
+```
+dst(H2 MAC) in mac_to_port → True
+
+```
+
+---
+
+### 4) **ICMP Echo Reply (H2 → H1)**
+
+- 이미 H1 MAC 학습되어 있음
+    - 이때는 첫 패킷이므로 FlowMod(H2 → H1) 설치됨
+        - 이미 설치된 경우 건너뜀
+
+---
+
+### 시나리오 : 메시지 관점
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H1 as H1 (Source)
+    participant SW as Switch
+    participant C as Controller
+    participant H2 as H2 (Destination)
+
+    %% 1. 스위치 초기 연결
+    SW->>C: SwitchFeatures Request
+    C-->>SW: SwitchFeatures Reply
+
+    %% 2. H1이 H2로 Ping 수행 → ARP 먼저 발생
+    H1->>SW: ARP Request (Who has H2?)
+    SW->>C: PacketIn (ARP Request)
+    C-->>SW: PacketOut (ARP Flood)
+    SW->>H2: ARP Request Broadcast
+
+    %% 3. H2가 H1에게 ARP Reply
+    H2->>SW: ARP Reply
+    SW->>C: PacketIn (ARP Reply)
+    C-->>SW: FlowMod (Install ARP flow for H2->H1)
+    C-->>SW: PacketOut (Send ARP Reply)
+    SW->>H1: ARP Reply Delivered
+
+    %% 4. ARP 해결 후 Ping(ICMP Echo Request)
+    H1->>SW: ICMP Echo Request (Ping)
+    SW->>C: PacketIn (No matching flow)
+    C-->>SW: FlowMod (Install flow H1->H2)
+    C-->>SW: PacketOut (Send ICMP packet)
+    SW->>H2: ICMP Echo Request Delivered
+
+    %% 5. H2가 Ping Echo Reply 전송
+    H2->>SW: ICMP Echo Reply
+    SW->>C: PacketIn (Flow missing first time)
+    C-->>SW: FlowMod (Install flow H2->H1)
+    C-->>SW: PacketOut (Send ICMP Reply)
+    SW->>H1: ICMP Echo Reply Delivered
+
+    %% 6. 이후 Ping은 스위치에서 직접 처리
+    H1->>SW: More ICMP packets
+    SW-->>H2: Forward using Flow Table
+
+```
+
+### SimpleSwitch13 구조에서 마지막 FlowMod 메시지
+
+- 마지막 FlowMod(H2 → H1, 19번)는 없어도 되지만,
+    - **SimpleSwitch13 구조에서는 생기게 되어 있음**
+- Ping 과정에서 이미 **첫 번째 ARP Reply** 처리 시점에 스위치는 아래를 학습
+    - H1 MAC → port_X
+    - H2 MAC → port_Y
+        - ARP Reply 단계에서 이미 **H2 → H1 방향 FlowMod 메시지가 생성됨**
+            - H2 → H1 ICMP Reply도 **ARP Reply 때 만들어진 FlowMod 메시지로 충분히 처리 가능**
+            - **따라서 마지막 FlowMod(H2 → H1)메시지는 없어도 ICMP Reply 전달 가능**
+    - ARP Reply 에서 이미 동일한 목적지 MAC(H1)에 대한 룰이 설치되어 있기 때문, **중복 FlowMod** 임
+
+---
+
+### SimpleSwitch13 컨트롤러는 설치된 FlowTable 내용을 확인하지 않음
+
+- PacketIn 오면 해당 방향 FlowMod가 아직 없다고 간주하고 매번 FlowMod를 설치
+    - 컨트롤러는 스위치에 룰이 이미 있는지 검사하지 않고, dst MAC이 학습되어 있으면 FlowMod 메시지로 다시 설치하도록 만들어져 있음
+        - 기존 FlowMod 가 있는지 확인
+            - 코드 없음
+        - 동일 FlowMod 라면 설치하지 않기
+            - 코드 없음
+    - PacketIn 이 **그 방향의 첫 Unicast 패킷이라고 판단**하면 FlowMod를 또 설치
+
+```python
+if dst in self.mac_to_port[dpid]:
+    self.add_flow(datapath, 1, match, actions)
+
+```
+
+---
+
+### 시나리오  :  플로우 관점
+
+```mermaid
+flowchart TD
+
+A[스위치 연결 EventOFPSwitchFeatures] --> B[SwitchFeatures 처리 시작]
+B --> C[table miss match 생성]
+C --> D[컨트롤러로 전달 action 설정]
+D --> E[table miss flow 설치 완료]
+
+P[PacketIn 수신] --> P1[패킷 데이터 파싱]
+P1 --> P2[Ethernet 헤더 추출]
+
+P2 --> Q{LLDP 또는 IPv6 멀티캐스트인가}
+Q -->|예| R[PacketIn 무시 후 종료]
+Q -->|아니오| S[src dst dpid 추출]
+
+S --> T[MAC 주소 학습]
+
+T --> V{목적지 MAC 학습됨}
+V -->|예| W[특정 포트로 out port 지정]
+V -->|아니오| X[FLOOD로 out port 지정]
+
+W --> Y[출력 액션 생성]
+X --> Y
+
+Y --> Z{FLOOD 아님}
+Z -->|예| Z1[flow match 생성]
+Z1 --> Z2{버퍼 아이디 존재}
+Z2 -->|예| Z3[버퍼 포함 FlowMod 설치 후 종료]
+Z2 -->|아니오| Z4[버퍼 없이 FlowMod 설치]
+
+Z -->|아니오| AA[FlowMod 설치 없이 진행]
+
+Z4 --> AB
+AA --> AB
+
+AB[PacketOut 메시지 생성] --> AC[스위치로 PacketOut 전송]
+
+```
+
+### **시나리오 1, 2: 구현 코드 (simple_switch_13.py)**
+
+```python
+from ryu.base import app_manager
+from ryu.controller import ofp_event
+from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
+from ryu.controller.handler import set_ev_cls
+from ryu.ofproto import ofproto_v1_3
+from ryu.lib.packet import packet
+from ryu.lib.packet import ethernet
+
+class SimpleSwitch13(app_manager.RyuApp):
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+
+    def __init__(self, *args, **kwargs):
+        super(SimpleSwitch13, self).__init__(*args, **kwargs)
+        self.mac_to_port = {}
+
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+    def switch_features_handler(self, ev):
+        datapath = ev.msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        print("\n[+] 스위치 연결, table-miss 플로우 설치")
+
+        match = parser.OFPMatch()
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
+                                          ofproto.OFPCML_NO_BUFFER)]
+        self.add_flow(datapath, 0, match, actions)
+
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        inst = [parser.OFPInstructionActions(
+            ofproto.OFPIT_APPLY_ACTIONS, actions)]
+
+        if buffer_id:
+            mod = parser.OFPFlowMod(
+                datapath=datapath, buffer_id=buffer_id, priority=priority,
+                match=match, instructions=inst)
+        else:
+            mod = parser.OFPFlowMod(
+                datapath=datapath, priority=priority,
+                match=match, instructions=inst)
+
+        print(f"[FlowMod] match={match} → actions={actions}")
+        datapath.send_msg(mod)
+
+    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def _packet_in_handler(self, ev):
+        msg = ev.msg
+        datapath = msg.datapath
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+
+        in_port = msg.match['in_port']
+
+        pkt = packet.Packet(msg.data)
+        eth = pkt.get_protocol(ethernet.ethernet)
+
+        if eth.ethertype == 35020 or eth.dst.startswith("33:33"):
+            return
+
+        src = eth.src
+        dst = eth.dst
+        dpid = datapath.id
+
+        self.mac_to_port.setdefault(dpid, {})
+
+        print(f"\n[PacketIn] dpid={dpid} src={src} dst={dst} in_port={in_port}")
+
+        # MAC Learning
+        self.mac_to_port[dpid][src] = in_port
+        print(f"  [MAC 학습] {src} → port {in_port}")
+
+        if dst in self.mac_to_port[dpid]:
+            out_port = self.mac_to_port[dpid][dst]
+        else:
+            out_port = ofproto.OFPP_FLOOD
+
+        actions = [parser.OFPActionOutput(out_port)]
+
+        if out_port != ofproto.OFPP_FLOOD:
+            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
+            if msg.buffer_id != ofproto.OFP_NO_BUFFER:
+                self.add_flow(datapath, 1, match, actions, msg.buffer_id)
+                return
+            else:
+                self.add_flow(datapath, 1, match, actions)
+
+        data = None
+        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
+            data = msg.data
+
+        out = parser.OFPPacketOut(
+            datapath=datapath, buffer_id=msg.buffer_id,
+            in_port=in_port, actions=actions, data=data)
+
+        datapath.send_msg(out)
+
+```
+
+---
+
+### 실험 : 시나리오 1
+
+### **Ryu 실행 (터미널 1)**
+
+```bash
+ryu-manager simple_switch_13.py
+
+```
+
+- 컨트롤러 화면
+
+![sdn.png](sdn.png)
+
+---
+
+### **Mininet 실행 (터미널 2)**
+
+```bash
+sudo mn --topo single,3 --mac --switch ovsk,protocols=OpenFlow13 --controller=remote
+
+```
+
+- 미니넷 화면
+
+![sdn.png](sdn%201.png)
+
+- 컨트롤러 화면
+
+![sdn.png](sdn%202.png)
+
+---
+
+### **첫 번째 [FlowMod] 명령**
+
+- **table-miss 플로우 설치**
+    - **스위치 연결 시 Ryu 컨트롤러가 자동으로 설치**
+
+```
+[+] 스위치 연결, table-miss 플로우 설치
+[FlowMod] match=OFPMatch(oxm_fields={}) → actions=[OFPActionOutput(len=16,max_len=65535,port=4294967293,type=0)]
+
+```
+
+---
+
+- match=OFPMatch(oxm_fields={})
+    - 빈 매치 조건
+        - **모든 패킷에 일치(match everything)**
+        - **그 어떤 조건에도 맞지 않는 모든 패킷이 이 rule을 타게 됨**
+
+```python
+parser.OFPMatch()
+
+```
+
+---
+
+- actions=[OFPActionOutput(...)]
+    - **스위치가 이 FlowMod 에 매칭되는 패킷을 컨트롤러에게 보내라.**
+        - 컨트롤러 포트 번호 : 4294967293 = OFPP_CONTROLLER
+        - 컨트롤러 특수 포트는 정수로 정의
+
+| OpenFlow 상수 | 실제 값 | 의미 |
+| --- | --- | --- |
+| **OFPP_CONTROLLER** |  0xfffffffd = 4294967293 (OF 1.3) | 패킷을 컨트롤러로 전송 |
+| OFPP_NORMAL | 0xfffa | L2 스위치처럼 동작 |
+| OFPP_FLOOD | 0xfffb | 플러딩 |
+- **이 패킷을 컨트롤러에게 보내라**
+
+```
+port=4294967293  #OFPP_CONTROLLER
+
+```
+
+---
+
+### max_len=65535 (OFPCML_NO_BUFFER)
+
+- **패킷 전체 내용을 잘라내지 말고 전체 패킷을 컨트롤러로 보내라**
+    - 스위치에서의 buffer_id 문제 방지하기 위해 PacketOut시 재전송하기 위해 컨트롤러가 사용
+    - 매칭되지 않는 모든 패킷은 스위치가 버리지 말고, Ryu 컨트롤러에게 PacketIn으로 보내라.
+
+```
+ofproto.OFPCML_NO_BUFFER
+
+```
+
+---
+
+## **Ping 테스트**
+
+```
+mininet> h1 ping h2
+
+```
+
+- 미니넷 화면
+
+![sdn.png](sdn%203.png)
+
+- 컨트롤러 화면
+
+![sdn.png](sdn%204.png)
+
+---
+
+## 실험 1 : FlowTable 상태 확인 (ARP 테이블 상태 확인 없음)
+
+- PacketIn 발생
+- 출발지 MAC 학습
+- 목적지 MAC 검사
+    - 있으면
+        - 유니캐스트 포워딩 FlowMod 설치
+    - 없으면
+        - FLOOD
+- PacketOut으로 패킷 전달
+    - 스위치는 그 FlowMod를 저장하여 이후 트래픽은 하드웨어 레벨에서 처리
+
+### **첫 번째** MAC **학습 : Ryu 컨트롤러**
+
+```
+[PacketIn] dpid=1 src=3e:41:43:e4:95:55 dst=ff:ff:ff:ff:ff:ff in_port=1
+  [MAC 학습] 3e:41:43:e4:95:55 → port 1
+
+```
+
+---
+
+### 1. PacketIn 발생
+
+```
+[PacketIn] dpid=1 src=3e:41:43:e4:95:55 dst=ff:ff:ff:ff:ff:ff in_port=1
+
+```
+
+### dpid=1
+
+- PacketIn이 발생한 스위치 ID = 스위치 1
+
+### src=3e:41:43:e4:95:55
+
+- 이 패킷을 보낸 **출발지 호스트의 MAC 주소**
+- 처음 등장한 MAC이므로 학습 대상
+
+### dst=ff:ff:ff:ff:ff:ff
+
+- 목적지 MAC = **브로드캐스트**
+- **ARP Request** 또는 IPv6 NDP, DHCP 등 브로드캐스트 패킷일 가능성이 높음
+
+### in_port=1
+
+- 이 패킷이 **스위치의 1번 포트에서 들어왔다**는 의미
+
+---
+
+### 2.  PacketIn에서 MAC 학습
+
+```
+[MAC 학습] 3e:41:43:e4:95:55 → port 1
+
+```
+
+### 3. 첫 번째 mac_to_port 테이블 기록
+
+- [1] 스위치 1에서 (dpid=1)
+    - [2] MAC=3e:41:43:e4:95:55인 ([mac=3e:41:43:e4:95:55])
+        - [3] 호스트는 포트 1에 연결되어 있다 ( = 1)
+        - 나중에 이 MAC을 목적지로 하는 패킷이 오면 스위치가 컨트롤러에게 올 필요 없이 **port 1으로 직접 포워딩**
+
+```
+mac_to_port[dpid=1][mac=3e:41:43:e4:95:55] = 1
+
+```
+
+---
+
+### MAC 학습 구조 : mac_to_port (딕셔너리 형태)
+
+- Ryu **컨트롤러** 내부 구조
+
+```python
+self.mac_to_port = {
+    1: {
+        "3e:41:43:e4:95:55": 1,
+        ...
+    }
+}
+
+```
+
+- **첫 번째 index**
+    - 스위치ID (DPID)
+- **두 번째 key**
+    - MAC 주소
+- **value**
+    - 들어온 포트 번호
+
+---
+
+### **두 번째** MAC **학습 : Ryu 컨트롤러**
+
+```
+[PacketIn] dpid=1 src=f2:09:70:30:d4:d3 dst=3e:41:43:e4:95:55 in_port=2
+  [MAC 학습] f2:09:70:30:d4:d3 → port 2
+
+```
+
+- **dpid=1**
+    - 스위치 ID 1번이 PacketIn을 보냈다
+- **src=f2:09:70:30:d4:d3**
+    - 이 패킷을 보낸 호스트의 MAC 주소
+    - 즉 **출발 MAC 주소**
+- **dst=3e:41:43:e4:95:55**
+    - 이 패킷이 도착해야 하는 목적지 MAC 주소
+- **in_port=2**
+    - 스위치 s1의 **포트 2에서 들어온 패킷 (ARP Reply)**
+
+```
+[PacketIn] dpid=1 src=f2:09:70:30:d4:d3 dst=3e:41:43:e4:95:55 in_port=2
+
+```
+
+---
+
+### MAC 학습 메시지
+
+- 스위치 1번에서 MAC 주소 f2:09:70:30:d4:d3 가진 장치는 포트 2에 연결되어 있음을 **Ryu가 학습(mac_to_port 테이블에 기록)**
+
+```
+[MAC 학습] f2:09:70:30:d4:d3 → port 2
+
+```
+
+---
+
+### 스위치의 역할
+
+- 패킷을 보고 규칙(Flow Table)이 없으면
+    - PacketIn으로 컨트롤러에 전달
+- FlowMod를 받으면 규칙을 설치함
+
+### 컨트롤러의 역할
+
+- PacketIn을 보고
+    - MAC 주소와 포트를 **학습**
+        - 이후 **FlowMod를 설치**
+    - 학습(Learning)
+        - 스위치가 아니라 **Ryu 컨트롤러의 기능**
+
+---
+
+```
+[스위치] -- PacketIn --> [Ryu 컨트롤러]
+                                 |
+                                 +-- mac_to_port[dpid][src] = in_port  ← 학습
+                                 |
+                                 +-- (필요하면) FlowMod 설치
+                                 |
+                    <-- PacketOut --+
+
+```
+
+---
+
+### 두 번째 mac_to_port 테이블 기록
+
+- 스위치 1번(s1)의 포트 2에는 MAC 주소 **f2:09:70:30:d4:d3** 장치가 연결되어 있음 확인
+- 다음 패킷을 이 MAC 주소로 보낼 경우
+    - 패킷을 스위치 포트 2로 내보내면 됨
+
+```python
+mac_to_port[1]["f2:09:70:30:d4:d3"] = 2
+
+```
+
+| 항목 | 의미 |
+| --- | --- |
+| PacketIn | 스위치가 규칙이 없어 컨트롤러에 패킷 전달 |
+| src MAC | 패킷을 보낸 호스트의 MAC |
+| in_port | 스위치의 어느 포트에서 들어왔는지 |
+| MAC 학습 | Ryu가 mac_to_port 테이블 업데이트 |
+| FlowMod | Ryu가 스위치에 규칙을 설치 |
+| 스위치 | 학습 하지 않음, 오직 FlowRule 실행 |
+
+---
+
+### **두 번째 [FlowMod]** (Flow Modification)
+
+- **스위치에게 in_port=2 이고 목적지 MAC이 3e:41:43:e4:95:55 이면, port=1 로 포워딩하라**
+- 새로운 **Flow Rule(흐름 규칙)**을 Ryu 컨트롤러가 스위치에 설치
+    - OpenFlow 메시지 종류 중 하나
+    - 스위치 Flow Table을 **추가 / 수정 / 삭제**할 때 사용하는 메시지.
+
+```
+[FlowMod] match=OFPMatch(oxm_fields={'in_port': 2, 'eth_dst': '3e:41:43:e4:95:55'})
+→ actions=[OFPActionOutput(len=16,max_len=65509,port=1,type=0)]
+
+```
+
+### match 조건
+
+- 스위치의 2번 포트로 들어왔고, 목적지 MAC 주소가 3e:41:43:e4:95:55 인 패킷
+    - 이 조건과 **정확히 일치하는 패킷만** 이 룰이 적용
+
+```
+{'in_port': 2, 'eth_dst': '3e:41:43:e4:95:55'}
+
+```
+
+---
+
+### actions
+
+- 그 패킷은 1번 포트로 내보내라 (forward)
+    - in_port=2 (호스트2)
+    - 목적지 MAC = 호스트1
+        - out_port = 1 (호스트1 쪽 링크)
+
+```
+[OFPActionOutput(port=1)]
+
+```
+
+---
+
+- **ARP Reply (또는 첫 번째 ICMP Ping 응답)를 처리**하는 과정에서 **두 번째 [FlowMod]** 설치
+- 패킷 흐름
+    - H2가 H1에 ping 응답을 보내려고 함
+    - 스위치에 해당 Flow가 없음
+        - PacketIn 발생
+    - Ryu가 목적지 MAC 3e:41:43:e4:95:55
+        - port 1이라고 학습
+        - FlowMod로 해당 규칙을 설치
+    - 그 뒤에는 동일한 패킷이 와도 스위치가 직접 처리하게 되어 더 이상 PacketIn이 발생하지 않음.
+
+---
+
+```
+match = (입력 포트 = 2 AND 목적지 MAC = 3e:41:43:e4:95:55)
+action = (1번 포트로 전송)
+
+```
+
+- Flow Rule이 스위치에 추가되었기 때문에 향후 이 조건과 일치하는 모든 패킷은 Ryu에게 올라오지 않고 스위치가 직접 포워딩
+
+---
+
+### **세 번째 [FlowMod]** (Flow Modification) 설치 (h1 → h2 방향)
+
+```
+[FlowMod] match={'in_port': 1, 'eth_dst': 'f2:09:70:30:d4:d3'}
+→ actions=[OUTPUT:2]
+
+```
+
+- 스위치에 다음 플로우 추가
+    - 앞으로 h1→h2 트래픽은 스위치가 직접 처리
+
+| match | action | 설명 |
+| --- | --- | --- |
+| in_port=1 AND eth_dst=f2:09:70:30:d4:d3 | output:2 | h1 → h2 포워딩 룰 |
+
+---
+
+```
+[PacketIn] dpid=1 src=00:00:00:00:00:01 dst=00:00:00:00:00:02 in_port=1
+  [MAC 학습] 00:00:00:00:00:01 → port 1
+[FlowMod] match=OFPMatch(oxm_fields={'in_port': 1, 'eth_dst': '00:00:00:00:00:02'}) → actions=[OFPActionOutput(len=16,max_len=65509,port=2,type=0)]
+
+```
+
+### **세 번째** MAC **학습 : Ryu 컨트롤러**
+
+```
+[PacketIn] dpid=1 src=00:00:00:00:00:01 dst=00:00:00:00:00:02 in_port=1
+
+```
+
+- dpid = 1
+    - 스위치 ID (데이터패스 ID)
+    - **스위치 s1에서 PacketIn이 발생했다**는 의미.
+
+---
+
+- src = 00:00:00:00:00:01
+    - 이 패킷을 보낸 MAC 주소 = **h1**
+
+---
+
+- dst = 00:00:00:00:00:02
+    - 목적지 MAC 주소 = **h2**
+    - h1이 h2로 가는 프레임을 보냈다.
+
+---
+
+- in_port = 1
+    - 이 패킷이 **스위치의 port 1**으로 들어왔다는 의미.
+
+```
+00:00:00:00:00:01 (h1) → (port 1) → s1
+
+```
+
+---
+
+### MAC 학습 단계
+
+```
+[MAC 학습] 00:00:00:00:00:01 → port 1
+
+```
+
+- Ryu 컨트롤러가 MAC 주소 테이블을 업데이트함
+
+```python
+mac_to_port[1]["00:00:00:00:00:01"] = 1
+
+```
+
+- h1(MAC=00:00:00:00:00:01)은 s1의 1번 포트에 연결되어 있다
+
+---
+
+### **세 번째 [FlowMod]** (Flow Modification) 설치 (h1 → h2 방향)
+
+- Ryu가 스위치에 **새로운 Flow entry**를 설치했다는 의미
+
+```
+[FlowMod] match=OFPMatch(oxm_fields={'in_port': 1, 'eth_dst': '00:00:00:00:00:02'})
+          → actions=[OFPActionOutput(port=2)]
+
+```
+
+---
+
+- match = {'in_port': 1, 'eth_dst': '00:00:00:00:00:02'}
+    - 스위치에게 다음 조건을 알려줌
+        - 만약 패킷이 port 1에서 들어오고, 목적지 MAC이 00:00:00:00:00:02라면 …
+        - 이 조건과 일치하는 패킷은 이제 컨트롤러로 오지 않음.
+    - 아래 형태의 패킷
+        - 앞으로는 스위치에서 직접 처리됨
+        - PacketIn 발생 안 함
+        - ping 속도가 빨라짐
+
+```
+in_port=1
+eth_dst = h2 MAC
+
+```
+
+---
+
+### actions = [Output:2]
+
+- Ryu가 스위치에 전달한 동작
+    - 이 매칭 조건을 만족하면 포트 2로 전송해라
+
+```
+h1 → s1 → (Flow Table 매칭) → s1의 port 2 → h2 로 전송
+
+```
+
+---
+
+## 실험 2 :**ARP 테이블(h1)과 플로우 테이블(스위치)**
+
+### ARP 테이블 (ARP Cache) :  h1
+
+- 호스트가 상대 MAC 주소를 알아야 IP 패킷을 만들 수 있기 때문에 존재
+
+| 항목 | 설명 |
+| --- | --- |
+| 저장 위치 | **호스트(h1) 내부 OS (Linux 커널)** |
+| 용도 | IP 주소 → MAC 주소 매핑 저장 |
+| 작동 계층 | L3 주소(IP)를 **L2 MAC 주소로 변환** |
+| 예시 | 10.0.0.2 → 00:00:00:00:00:02 |
+| 확인 명령 | `h1 arp -n` 또는 `h1 ip neigh` |
+| 만료 시간 | 수십 초~몇 분 후 삭제됨 |
+
+### 로컬 캐시
+
+```
+IP 주소 → MAC 주소
+
+```
+
+---
+
+### 플로우 테이블 (Flow Table) : 스위치(OVS)
+
+- 스위치가 어떤 포트로 포워딩해야 하는가를 표현
+
+| 항목 | 설명 |
+| --- | --- |
+| 저장 위치 | **스위치 (OVS) 내부** |
+| 용도 | 패킷이 어떤 포트로 가야 하는지 결정 |
+| 작동 계층 | **L2 스위칭 규칙** (MAC 기반) |
+| 예시 | in_port=1, eth_dst=h2 → output=2 |
+| 확인 명령 | `ovs-ofctl dump-flows s1` |
+| 만료 시간 | idle_timeout, hard_timeout 또는 삭제 전까지 유지 |
+
+### **스위치 룰(rule)** 저장
+
+```
+in_port + MAC 주소 → output_port
+
+```
+
+---
+
+| 구분 | ARP 테이블 (h1) | Flow Table (스위치) |
+| --- | --- | --- |
+| 저장 위치 | Host 내부 | Switch 내부 |
+| 저장 내용 | IP → MAC | 포트 + MAC → 포트 |
+| 역할 | 상대 MAC 주소 찾기 | 프레임 포워딩 |
+| 작동 계층 | 3계층(IP)와 2계층(MAC) 사이 | 2계층(MAC switching) |
+| 누가 관리? | OS(Linux kernel) | OpenFlow 스위치 (OVS) |
+| 누가 업데이트? | ARP 프로토콜 | SDN 컨트롤러(Ryu) |
+
+### ping 과정에서 ARP 테이블과 Flow 테이블
+
+### h1에서 일어나는 일
+
+```
+10.0.0.2의 MAC 주소가 무엇인지 모름
+→ ARP Request 전송
+→ ARP Reply 수신
+→ ARP 테이블에 저장
+
+```
+
+### 스위치에서 일어나는 일
+
+```
+00:00:00:00:00:01 → port 1 (h1)
+00:00:00:00:00:02 → port 2 (h2)
+→ FlowMod 설치 (컨트롤러)
+
+```
+
+- 실험 코드
+    - monitor_arp_flows.py
+
+```python
+#!/usr/bin/python
+
+from mininet.net import Mininet
+from mininet.node import RemoteController, OVSKernelSwitch
+from mininet.cli import CLI
+import time
+
+def monitor_arp_and_flows(h1, s1, ping_proc, interval=0.5):
+    """
+    h1: Mininet host 객체 (예: h1)
+    s1: Mininet switch 객체 (예: s1)
+    ping_proc: h1.popen(...) 으로 실행한 ping 프로세스
+    interval: 몇 초마다 상태를 확인할지
+    """
+    last_arp = None
+    last_flows = None
+
+    print("\n=== ARP / Flow Table 모니터링 시작 ===\n")
+
+    # ping 프로세스가 끝날 때까지 루프
+    while ping_proc.poll() is None:
+        # 1) h1의 ARP 테이블
+        arp = h1.cmd("arp -n")
+        if arp != last_arp:
+            print("\n=== [ARP 테이블 변경] h1 ===")
+            print(arp.strip())
+            last_arp = arp
+
+        # 2) s1의 Flow Table
+        flows = s1.cmd("ovs-ofctl dump-flows s1")
+        if flows != last_flows:
+            print("\n=== [Flow Table 변경 감지] s1 ===")
+            print(flows.strip())
+            last_flows = flows
+
+        time.sleep(interval)
+
+    print("\n=== ping 종료, 최종 ARP / Flow Table 상태 ===\n")
+    # 종료 직후 한 번 더 찍어주기 (선택)
+    arp = h1.cmd("arp -n")
+    if arp != last_arp:
+        print("\n=== [최종 ARP 테이블] h1 ===")
+        print(arp.strip())
+
+    flows = s1.cmd("ovs-ofctl dump-flows s1")
+    if flows != last_flows:
+        print("\n=== [최종 Flow Table] s1 ===")
+        print(flows.strip())
+
+def test():
+    print("\n=== 네트워크 생성 ===\n")
+    net = Mininet(controller=RemoteController, switch=OVSKernelSwitch)
+
+    # 리모트 컨트롤러 (Ryu) 설정
+    c0 = net.addController('c0', ip='127.0.0.1', port=6633)
+
+    # 호스트와 스위치 생성
+    h1 = net.addHost('h1', ip='10.0.0.1/24')
+    h2 = net.addHost('h2', ip='10.0.0.2/24')
+    s1 = net.addSwitch('s1')
+
+    # 링크 연결
+    net.addLink(h1, s1)
+    net.addLink(h2, s1)
+
+    # 네트워크 시작
+    net.start()
+
+    print("\n=== (1) 초기 ARP 테이블 확인 (h1) ===\n")
+    print(h1.cmd("arp -n"))
+
+    print("\n=== (2) 초기 Flow Table (s1) ===\n")
+    print(s1.cmd("ovs-ofctl dump-flows s1"))
+
+    # (3) ping을 백그라운드 프로세스로 실행 (stdout은 여기서 굳이 안 읽어도 됨)
+    print("\n=== (3) h1 → h2 ping 실행 (3회) ===\n")
+    ping_proc = h1.popen("ping -c 3 10.0.0.2")
+
+    # (4) ping이 도는 동안 ARP / Flow Table 실시간 모니터링
+    monitor_arp_and_flows(h1, s1, ping_proc, interval=0.5)
+
+    # (5) 원하면 ping 결과를 한 번 더 실행해서 눈으로 확인 (추가 ping이지만 상관 없다면)
+    print("\n=== (5) ping 결과 확인 (추가 1회 실행) ===\n")
+    print(h1.cmd("ping -c 1 10.0.0.2"))
+
+    print("\n=== 이제 CLI에서 추가 실험을 해도 됩니다. ===\n")
+    CLI(net)
+    net.stop()
+
+if __name__ == "__main__":
+    test()
+
+```
+
+### **Ryu MAC 학습 → FlowMod 설치 → ARP/Ping 흐름 관찰**
+
+- Mininet 환경 생성 (H1–S1–H2)
+- Ryu 컨트롤러와 연결된 OVS 스위치 사용
+- H1 → H2 로 ping을 보내면서
+    - H1 의 ARP 테이블 변화 출력
+    - S1 의 Flow Table(ovs-ofctl dump-flows) 변화 출력
+- FlowMod(ARP Reply, ICMP Ping) 설치 과정 확인
+
+# ---------------------------------------------------
+
+# monitor_arp_and_flows() 함수
+
+# ---------------------------------------------------
+
+```python
+def monitor_arp_and_flows(h1, s1, ping_proc, interval=0.5):
+
+```
+
+- ping 이 보내지는 동안
+- h1 의 ARP 테이블과 s1 의 OpenFlow Flow Table 의 변화를 **실시간으로 출력**
+    - 언제 ARP 가 생기는지, 언제 FlowMod 가 설치되는지 자동 감지
+
+---
+
+### 1) 이전 상태를 저장하기 위한 변수
+
+```python
+last_arp = None
+last_flows = None
+
+```
+
+### 2) ping 프로세스가 끝날 때까지 반복
+
+- poll() → 프로세스가 살아있으면 None 을 반환
+    - ping 이 끝날 때까지 계속 체크하는 구문
+
+```python
+while ping_proc.poll() is None:
+
+```
+
+---
+
+### 3) ARP 테이블 변화 감지
+
+- H1 의 ARP 테이블을 읽음
+    - 이전 값과 다르면
+        - 실제로 ARP learning 이 발생한 상태
+- ARP Reply 도착 순간 ARP 테이블이 변하므로 이 출력이 뜸
+
+```python
+arp = h1.cmd("arp -n")
+if arp != last_arp:
+    print("\n=== [ARP 테이블 변경] h1 ===")
+    print(arp.strip())
+    last_arp = arp
+
+```
+
+---
+
+### 4) Flow Table 변화 감지
+
+- S1 내부의 OVS Flow Table 을 읽음
+    - 이전과 다르면 FlowMod 설치됨 의미
+        - SimpleSwitch13 이 FlowMod 를 설치한 순간 추적
+
+```python
+flows = s1.cmd("ovs-ofctl dump-flows s1")
+if flows != last_flows:
+    print("\n=== [Flow Table 변경 감지] s1 ===")
+    print(flows.strip())
+    last_flows = flows
+
+```
+
+---
+
+# ---------------------------------------------------
+
+# test() 함수
+
+# ---------------------------------------------------
+
+### 1) Mininet 토폴로지 생성
+
+- RemoteController
+    - Ryu 와 TCP 연결
+- OVSKernelSwitch
+    - 실제 OVS 커널 모듈 기반 스위치
+
+```python
+net = Mininet(controller=RemoteController, switch=OVSKernelSwitch)
+
+```
+
+---
+
+### 2) 컨트롤러 등록
+
+- Ryu SimpleSwitch13 을 이 포트에서 실행 중
+
+```python
+c0 = net.addController('c0', ip='127.0.0.1', port=6633)
+
+```
+
+---
+
+### 3) 호스트/스위치 추가
+
+```python
+h1 = net.addHost('h1', ip='10.0.0.1/24')
+h2 = net.addHost('h2', ip='10.0.0.2/24')
+s1 = net.addSwitch('s1')
+
+```
+
+---
+
+### 4) 링크 연결
+
+- H1—S1—H2 구조
+
+```python
+net.addLink(h1, s1)
+net.addLink(h2, s1)
+
+```
+
+---
+
+### 5) 네트워크 시작
+
+- OVS 스위치가 Ryu 컨트롤러에 접속함
+    - 여기서 Ryu 가 SwitchFeatures/FlowMod(table-miss) 설치
+
+```python
+net.start()
+
+```
+
+---
+
+### 6) 초기 상태 출력
+
+- Flow Table 이 비어있음을 확인
+
+```python
+print(h1.cmd("arp -n"))
+print(s1.cmd("ovs-ofctl dump-flows s1"))
+
+```
+
+---
+
+### 7) ping 비동기 실행
+
+- h1.popen()은 백그라운드에서 ping 실행
+    - Mininet의 Host 객체가 ping 명령을 **별도의 프로세스(subprocess)** 로 실행하고 그 프로세스를 제어할 수 있는 핸들(popen 객체)을 반환
+    - **실행 중에도 Python 코드가 계속 진행됨**
+        - `poll()`, `wait()`, `stdout` 등을 사용해서 프로세스를 관찰할 수 있음
+        - stdout : 여기서 사용하지 않음
+        - ping 이 즉시 시작되지만 Python 은 ping 끝날 때까지 기다리지 않음
+            - 바로 다음 코드가 실행됨
+
+```python
+ping_proc = h1.popen("ping -c 3 10.0.0.2")
+
+```
+
+---
+
+### 8) 실시간 ARP/FlowTable 모니터링 시작
+
+- ARP, FlowMod 설치되는 순간 콘솔 출력
+
+```python
+monitor_arp_and_flows(h1, s1, ping_proc, interval=0.5)
+
+```
+
+---
+
+### 9) CLI 열기
+
+- 직접 mininet 하에 명령어 입력 가능
+
+```python
+CLI(net)
+
+```
+
+---
+
+# ---------------------------------------------------
+
+# 스크립트 실행 흐름
+
+# ---------------------------------------------------
+
+### 첫 Ping 전 H1 상태
+
+- ARP 테이블
+    - 비어 있음
+- Flow Table
+    - table-miss 룰만 있음
+
+### Ping 도중
+
+### [1] ARP Request 전송
+
+- FlowMod 없음
+- FlowTable 변화 없음
+
+### [2] ARP Reply 도착
+
+- FlowMod (H2→H1) 설치
+- Flow Table 변경 출력
+
+### [3] Ping (ICMP Echo Request)
+
+- FlowMod (H1→H2) 설치
+- FlowTable 변경 출력
+
+### [4] ICMP Echo Reply
+
+- 필요하면 또 FlowMod(H2→H1) 재설치
+
+---
+
+### 실행화면
+
+![sdn.png](sdn%205.png)
+
+### 실행화면
+
+![sdn.png](sdn%206.png)
+
+### **ARP 프로토콜 출력**
+
+- h1이 10.0.0.2(h2)의 MAC 주소를 새로 학습했다는 뜻
+    - **IP 10.0.0.2 → MAC ea:07:63:36:4a:06**
+    - h1은 이제 h2의 MAC 주소를 알고 있기 때문에 이후 ICMP ping은 직접 MAC 주소로 이더넷 프레임을 구성해서 보냄
+
+```
+=== [ARP 테이블 변경] h1 ===
+Address                  HWtype  HWaddress           Flags Mask            Iface
+10.0.0.2                 ether   ea:07:63:36:4a:06   C                     h1-eth0
+
+```
+
+- **Address = 10.0.0.2**
+    - h1이 찾고자 했던 대상의 **IP 주소**, 즉 h2의 IP.
+    - 핑을 보내기 위해
+    - 이 IP 주소에 대한 MAC 주소가 필요하므로 ARP가 사용됨.
+
+```
+h1 → 10.0.0.2
+
+```
+
+---
+
+- **HWtype = ether**
+    - **하드웨어 타입: Ethernet(1)**
+    - MAC 주소 기반의 Ethernet 네트워크임
+
+---
+
+- **HWaddress = ea:07:63:36:4a:06**
+    - **10.0.0.2의 실제 MAC 주소**, 즉 **h2의 MAC 주소**
+    - 이 주소는 h2가 ARP reply에서 알려준 MAC 주소
+        - 이 정보를 h1이 자신의 ARP cache에 저장함
+
+```
+ARP Reply:
+10.0.0.2 is at ea:07:63:36:4a:06
+
+```
+
+---
+
+- **Flags = C**
+    - **C = COMPLETE**
+    - ARP entry가 완전히 채워졌음
+    - `C` 완전히 학습 완료된 상태.
+
+---
+
+- **Iface = h1-eth0**
+    - 이 ARP 정보는 **h1의 eth0 인터페이스를 통해** 배워진 것임
+    
+
+---
+
+### ARP 테이블과 Flow Table
+
+- ARP 테이블
+    - **호스트(h1 OS 내부)가 관리**
+- Flow Table
+    - **OVS 스위치(s1)가 관리**
+- h1(10.0.0.1)이 h2(10.0.0.2)에게 ping 보내려고 했음
+- 목적지 MAC 주소를 모름 → ARP 요청 브로드캐스트
+- h2가 ARP Reply로 자신의 MAC을 알려줌
+- h1은 아래처럼 ARP 테이블에 기록
+    - 이제 ping(ICMP)을 정상적으로 전송할 수 있게 됨
+    - 플로우 테이블에도 h1→h2 방향의 FlowMod가 설치됨
+
+```
+10.0.0.2  →  ea:07:63:36:4a:06
+
+```
+
+| 계층 | 관리 주체 | 역할 |
+| --- | --- | --- |
+| L2 ARP Cache | 호스트 OS | IP → MAC 매핑 저장 |
+| OpenFlow Flow Table | 스위치 + Ryu | 패킷 포워딩 룰 저장 |
+
+---
+
+### 실행화면
+
+![sdn.png](sdn%207.png)
+
+### 실행화면
+
+![sdn.png](sdn%208.png)
