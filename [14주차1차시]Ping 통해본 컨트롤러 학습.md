@@ -524,7 +524,7 @@ ryu-manager simple_switch_13.py
 
 - 컨트롤러 화면
 
-![sdn.png](sdn.png)
+![pcon.png](pcon.png)
 
 ---
 
@@ -537,11 +537,11 @@ sudo mn --topo single,3 --mac --switch ovsk,protocols=OpenFlow13 --controller=re
 
 - 미니넷 화면
 
-![sdn.png](sdn%201.png)
+![pcon1.png](pcon1.png)
 
 - 컨트롤러 화면
 
-![sdn.png](sdn%202.png)
+![pcon2.png](pcon2.png)
 
 ---
 
@@ -611,11 +611,11 @@ mininet> h1 ping h2
 
 - 미니넷 화면
 
-![sdn.png](sdn%203.png)
+![pcon3.png](pcon3.png)
 
 - 컨트롤러 화면
 
-![sdn.png](sdn%204.png)
+![pcon.png](pcon4.png)
 
 ---
 
@@ -1387,11 +1387,11 @@ CLI(net)
 
 ### 실행화면
 
-![sdn.png](sdn%205.png)
+![pcon5.png](pcon5.png)
 
 ### 실행화면
 
-![sdn.png](sdn%206.png)
+![pcon6.png](pcon6.png)
 
 ### **ARP 프로토콜 출력**
 
@@ -1477,8 +1477,8 @@ ARP Reply:
 
 ### 실행화면
 
-![sdn.png](sdn%207.png)
+![pcon7.png](pcon7.png)
 
 ### 실행화면
 
-![sdn.png](sdn%208.png)
+![pcon8.png](pcon8.png)
