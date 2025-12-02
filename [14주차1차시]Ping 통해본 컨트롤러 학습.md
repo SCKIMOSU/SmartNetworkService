@@ -2,6 +2,73 @@
 
 ---
 
+### **Ping Request(ICMP Echo Request)**
+
+- **Ethernet 프레임으로 전송하려면 H2의 MAC 주소 필요**
+- Ethernet(데이터링크 계층)은 **MAC 주소 기반**으로 동작
+    - IP 패킷(=Ping Request)을 보내기 위해서는 목적지 MAC 주소가 있어야 함
+
+---
+
+### Ping(ICMP) IP 패킷
+
+- Ping Request 구조
+    - L3
+        - ICMP Echo Request (IP 패킷)
+    - L2
+        - Ethernet frame 필요
+    - NIC(네트워크 인터페이스)는 IP 패킷을 **MAC 주소 없이 절대로 전송할 수 없음**
+        - Ping(=IP 패킷)은 **MAC 주소가 없으면 나갈 수 없는 패킷**
+
+---
+
+### Ethernet 프레임
+
+- Ping Request 가 전송되려면 아래 3개가 필요
+    - 여기서 **dst MAC = H2 MAC** 을 모르면 Ethernet 프레임을 생성할 수 없음
+
+```
+src MAC = H1 MAC
+dst MAC = H2 MAC  ← 반드시 필요
+eth_type = 0x0800 (IP)
+payload = ICMP Echo Request
+
+```
+
+---
+
+### 목적지 MAC 을 모를 때 → ARP Request 발생
+
+- H1 → H2 ping
+
+### Ping 보내려고 함
+
+H2 MAC 모름 
+
+### ARP Request 브로드캐스트
+
+ff:ff:ff:ff:ff:ff
+
+### H2 → ARP Reply
+
+내 MAC: aa:bb:cc:dd:ee:ff
+
+### H1 이 ARP Table 업데이트
+
+10.0.0.2 → aa:bb:cc:dd:ee:ff
+
+### Ping Request Ethernet 프레임 생성 후 전송
+
+```
+src MAC = H1_MAC
+dst MAC = H2_MAC   ← 필요
+eth_type = IPv4
+payload = ICMP Echo Request
+
+```
+
+---
+
 ### 사용자 애플리케이션이 아래 명령어로  h1에게 명령함
 
 ```
@@ -537,11 +604,11 @@ sudo mn --topo single,3 --mac --switch ovsk,protocols=OpenFlow13 --controller=re
 
 - 미니넷 화면
 
-![pcon1.png](pcon1.png)
+![pcon.png](pcon1.png)
 
 - 컨트롤러 화면
 
-![pcon2.png](pcon2.png)
+![pcon.png](pcon2.png)
 
 ---
 
@@ -611,7 +678,7 @@ mininet> h1 ping h2
 
 - 미니넷 화면
 
-![pcon3.png](pcon3.png)
+![pcon.png](pcon3.png)
 
 - 컨트롤러 화면
 
@@ -1387,11 +1454,11 @@ CLI(net)
 
 ### 실행화면
 
-![pcon5.png](pcon5.png)
+![pcon.png](pcon5.png)
 
 ### 실행화면
 
-![pcon6.png](pcon6.png)
+![pcon.png](pcon6.png)
 
 ### **ARP 프로토콜 출력**
 
@@ -1477,8 +1544,8 @@ ARP Reply:
 
 ### 실행화면
 
-![pcon7.png](pcon7.png)
+![pcon.png](pcon7.png)
 
 ### 실행화면
 
-![pcon8.png](pcon8.png)
+![pcon.png](pcon8.png)
