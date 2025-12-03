@@ -2,22 +2,22 @@
 
 ---
 
-### **Ping Request(ICMP Echo Request)**
+### **Ping Request (ICMP Echo Request)**
 
-- **Ethernet 프레임으로 전송하려면 H2의 MAC 주소 필요**
+- **Ethernet 프레임으로 전송하려면 H2 MAC 주소 필요**
 - Ethernet(데이터링크 계층)은 **MAC 주소 기반**으로 동작
     - IP 패킷(=Ping Request)을 보내기 위해서는 목적지 MAC 주소가 있어야 함
 
 ---
 
-### Ping(ICMP) IP 패킷
+### Ping (ICMP) IP 패킷
 
 - Ping Request 구조
     - L3
         - ICMP Echo Request (IP 패킷)
     - L2
         - Ethernet frame 필요
-    - NIC(네트워크 인터페이스)는 IP 패킷을 **MAC 주소 없이 절대로 전송할 수 없음**
+        - NIC(네트워크 인터페이스)는 IP 패킷을 **MAC 주소 없이 절대로 전송할 수 없음**
         - Ping(=IP 패킷)은 **MAC 주소가 없으면 나갈 수 없는 패킷**
 
 ---
@@ -25,7 +25,7 @@
 ### Ethernet 프레임
 
 - Ping Request 가 전송되려면 아래 3개가 필요
-    - 여기서 **dst MAC = H2 MAC** 을 모르면 Ethernet 프레임을 생성할 수 없음
+    - **dst MAC = H2 MAC** 을 모르면 Ethernet 프레임을 생성할 수 없음
 
 ```
 src MAC = H1 MAC
@@ -37,53 +37,36 @@ payload = ICMP Echo Request
 
 ---
 
-### 목적지 MAC 을 모를 때 → ARP Request 발생
+### 목적지 H2 MAC을 모를 때 → ARP Request 발생
 
-- H1 → H2 ping
+- H1 → H2 Ping 보내려고 함
+    - H2 MAC 모름
+- ARP Request 브로드캐스트
+    - ff:ff:ff:ff:ff:ff
+- H2 → ARP Reply
+    - MAC: aa:bb:cc:dd:ee:ff
+- H1 이 ARP Table 업데이트
+    - 10.0.0.2 → aa:bb:cc:dd:ee:ff
 
-### Ping 보내려고 함
-
-H2 MAC 모름 
-
-### ARP Request 브로드캐스트
-
-ff:ff:ff:ff:ff:ff
-
-### H2 → ARP Reply
-
-내 MAC: aa:bb:cc:dd:ee:ff
-
-### H1 이 ARP Table 업데이트
-
-10.0.0.2 → aa:bb:cc:dd:ee:ff
-
-### Ping Request Ethernet 프레임 생성 후 전송
-
-```
-src MAC = H1_MAC
-dst MAC = H2_MAC   ← 필요
-eth_type = IPv4
-payload = ICMP Echo Request
-
-```
+### Ethernet 프레임 생성 후 Ping Request 전송
 
 ---
 
-### 사용자 애플리케이션이 아래 명령어로  h1에게 명령함
+### 사용자 애플리케이션이 h1에게 Ping Request 명령함
 
 ```
 mininet> h1 ping h2
 
 ```
 
-### h1 운영체제(OS)
+### h1 운영체제 (OS)
 
 - h2 MAC 주소를 알아야 Ethernet 프레임을 만들 수 있음
 - ARP Request 생성
 
 ```
-이 IP 주소(10.0.0.2)와 통신해야 하네?
-MAC 주소를 알아야 Ethernet 프레임을 만들 수 있는데?
+이 IP 주소(10.0.0.2)와 통신해야 함
+MAC 주소를 알아야 Ethernet 프레임을 만들 수 있음
 
 ```
 
@@ -126,21 +109,13 @@ h1 ping 10.0.0.2
 
 ---
 
-### **Flow** Table**과 FlowMod**
+## **FlowMod (Flow Modification Message)**
 
-- **FlowMod**
-    - **명령(Command)**
-- **Flow Table**
-    - **스위치 내부에 저장되는 룰(Rule set)**
+### **명령(Command)**
 
----
-
-### 컨트롤러 FlowMod 메시지
-
-- **스위치에게 룰을 설치하라는 명령(OpenFlow 메시지)**
-    - 이 매칭 조건(match)과 액션(action)을 가진 룰을 추가하라
-    - 이 룰을 삭제하라
-    - 이 룰을 수정하라
+- 컨트롤러(Ryu)가 스위치에게 보내는 **OpenFlow 메시지**
+    - **Flow Table을 추가/수정/삭제하라는 지시**
+- 이 조건의 룰을 Flow Table에 설치하라 라는 **지시 메시지**
 - **FlowMod 메시지**
 
 ```
@@ -157,26 +132,44 @@ FlowMod {
 
 ```
 
-### 스위치 Flow Table
+---
 
-- **스위치 내부에 저장**
-- **룰(rule) 목록**
+## **Flow Table (스위치 내부 룰 집합)**
+
+### **데이터 패스 룰(Rule set)**
+
+- 스위치(OVS)의 내부 데이터플레인에 실제 저장되는 룰
+- 패킷 처리는 이 Flow Table 을 기반으로 함
+- FlowMod 명령의 결과가 저장되는 곳
+
+### ovs-ofctl dump-flows 결과
+
+- FlowMod 지시에 따라 스위치에 생성된 규칙
 
 ```
-cookie=0x0, priority=1, in_port=1, eth_dst=aa:bb:cc:dd:ee:ff, actions=output:2
+priority=1, in_port=1, eth_dst=H2_MAC, actions=output:2
 
 ```
 
-- match
-    - 어떤 패킷에 적용할지?
 - priority
     - 우선순위
 - actions
     - 매칭되면 어떻게 처리할지?
 - counters
-    - 패킷 수, 바이트 수
-- 등이 포함된 **스위치의 실제 상태(state)**
+    - 패킷 수, 바이트 수 등이 포함된 **스위치의 실제 상태(state)**
 - Flow Table 은 **스위치가 패킷을 처리할 때 참조하는 데이터 구조**
+
+### **FlowMod(명령)가 Flow Table(룰)을 생성**
+
+- 스위치가 패킷 포워딩에 사용
+
+| 항목 | FlowMod | Flow Table |
+| --- | --- | --- |
+| 정의 | 스위치에게 룰을 설치하라는 **명령 메시지** | 스위치 내부에 저장되는 **실제 룰** |
+| 존재 위치 | 컨트롤러(Ryu)에서 생성 | 스위치(OVS) 내부에 저장 |
+| 수명 | 메시지 전송 후 소멸 | idle/hard timeout 까지 유지 |
+| 목적 | Flow Table 변경 | 패킷 처리 |
+| 실행 주체 | 컨트롤러 | 스위치 데이터플레인 |
 
 ---
 
@@ -198,7 +191,7 @@ Flow Table (스위치 내부 룰)
 
 ---
 
-### `add_flow()` 함수가 스위치로 FlowMod 메시지를 보냄
+### `add_flow()` 함수가 스위치로 FlowMod 메시지 보냄
 
 ```python
 match = parser.OFPMatch(in_port=1, eth_dst="00:00:00:00:00:02")
@@ -209,7 +202,7 @@ self.add_flow(datapath, 1, match, actions)
 
 ### 스위치 내부
 
-- Flow Table 이 아래와 같이 바뀜
+- Flow Table 이 다음과 같이 바뀜
     - FlowMod 명령어는 저장되지 않음
     - FlowMod 명령어를 처리한 결과가 Flow Table 에 저장됨.
 
@@ -220,17 +213,17 @@ cookie=0x0, priority=1, in_port=1, eth_dst=00:00:00:00:00:02, actions=output:2
 
 ---
 
-### 컨트롤러 **MAC 학습 테이블 :** mac_to_port
+### 컨트롤러에서 유지하는 **MAC 학습 테이블 :** mac_to_port
 
-- 컨트롤러에서 유지하는 **MAC 학습 테이블**
-    - 학습된 MAC → 포트 대응을 기록하기 위한 **소프트웨어 테이블**
-    - **중첩 딕셔너리(dict)**
-        - **첫 번째 key**
-            - 스위치 번호 (=DPID)
-        - **두 번째 key**
-            - 호스트의 MAC 주소
-        - **value**
-            - 해당 MAC이 들어온 스위치 포트 번호
+- 학습된 MAC
+    - 포트 대응을 기록하기 위한 **소프트웨어 테이블**
+- **중첩 딕셔너리(dict) 구조**
+    - **첫 번째 Key**
+        - 스위치 번호 (=DPID)
+    - **두 번째 Key**
+        - 호스트의 MAC 주소
+    - **Value**
+        - 해당 MAC이 들어온 스위치 포트 번호
 
 ```
 mac_to_port = {
@@ -284,6 +277,177 @@ mac_to_port = {
 ```
 
 ---
+
+# `mac_to_port` 테이블 변화
+
+- **1H1 → H2 첫 패킷** 시점
+- **H2 → ARP Reply** 시점
+- 토폴로지
+    - 스위치 dpid = 1
+    - h1 ↔ s1 포트 1
+    - h2 ↔ s1 포트 2
+
+```mermaid
+sequenceDiagram
+    participant H1 as H1
+    participant S1 as Switch (OVS)
+    participant C as Controller (Ryu)
+    participant H2 as H2
+
+    Note over H1: Ping 요청 시작<br>(H2 MAC 모름 → ARP Request 발생)
+
+    H1->>S1: ARP Request (broadcast)
+    S1->>C: PacketIn (no flow match)
+
+    Note over C: mac_to_port 상태:<br>{ H1_MAC : port1 }
+
+    C->>S1: PacketOut(FLOOD)
+
+    S1->>H2: ARP Request 전달
+
+    Note over H2: H2는 ARP Reply 준비
+
+    H2->>S1: ARP Reply (unicast to H1)
+    S1->>C: PacketIn
+
+    Note over C: mac_to_port 상태:<br>{ H1_MAC : 1, H2_MAC : 2 }
+
+    Note over C: 목적지 MAC(H1_MAC) 존재 → FlowMod 설치 가능
+
+    C->>S1: FlowMod(H2→H1)
+
+    Note over S1: Flow Table 업데이트:<br>eth_dst = H1_MAC → out_port = 1
+
+    S1->>H1: ARP Reply 전달
+
+    Note over H1: ARP Table 업데이트<br>(10.0.0.2 → H2_MAC)
+
+    Note over H1: Ping Request 전송 가능 상태 완성
+
+```
+
+---
+
+## H1 → H2 첫 패킷 시점의 mac_to_port 상태
+
+### 단계 1: 아무 트래픽도 없었을 때
+
+```python
+self.mac_to_port = {}
+
+```
+
+- 스위치 dpid=1 기준
+
+```python
+self.mac_to_port[1]  # 존재하지도 않음
+
+```
+
+---
+
+### 단계 2: H1 이 H2 로 ping 시도 → 먼저 ARP Request 전송
+
+- H1 이 `10.0.0.2`로 ping 을 보내려 하면, H2 의 MAC 을 모르기 때문에 먼저 **ARP Request** 를 브로드캐스트
+- 이 ARP Request 프레임이 스위치 s1 에 도착하면
+    - `in_port = 1` (H1 이 연결된 포트)
+    - `src = H1_MAC`
+    - `dst = ff:ff:ff:ff:ff:ff` (브로드캐스트)
+- 컨트롤러의 `_packet_in_handler` 에서 수행
+
+```python
+self.mac_to_port.setdefault(dpid, {})
+self.mac_to_port[1][H1_MAC] = 1
+
+```
+
+- 이 시점의 `mac_to_port` 상태
+    - **알고 있는 것**
+        - H1_MAC 은 포트 1에서 들어온다
+    - **모르는 것**
+        - H2_MAC, H2 가 어디 포트에 있는지 모름
+
+```python
+mac_to_port = {
+    1: {
+        H1_MAC: 1
+    }
+}
+
+```
+
+- `dst`(H2_MAC)가 mac_to_port 에 없으니
+    - 스위치는 이 ARP Request 를 FLOOD(브로드캐스트)로 뿌리고,
+    - **FlowMod 도 아직 설치 못함** (어디로 보내야 할지 모름)
+
+```python
+if dst in mac_to_port[1]:
+    # False
+    # ⇒ out_port = FLOOD
+
+```
+
+---
+
+## H2 → ARP Reply 시점의 mac_to_port 상태 변화
+
+- 이제 브로드캐스트된 ARP Request 를 받은 H2 가 **ARP Reply 를 unicast 로 H1 에게 보냄**
+
+### 단계 3: H2 → ARP Reply 패킷이 s1 에 도착
+
+- ARP Reply 프레임
+    - `in_port = 2` (H2 가 연결된 포트)
+    - `src = H2_MAC`
+    - `dst = H1_MAC`
+- 컨트롤러에서 다시 PacketIn 처리
+
+```python
+self.mac_to_port.setdefault(dpid, {})
+self.mac_to_port[1][H2_MAC] = 2
+
+```
+
+- `mac_to_port` 상태는 다음처럼 변경
+    - H1_MAC → port 1
+    - H2_MAC → port 2
+    - **양쪽 MAC 모두 학습 완료된 상태**
+
+```python
+mac_to_port = {
+    1: {
+        H1_MAC: 1,
+        H2_MAC: 2
+    }
+}
+
+```
+
+---
+
+### 단계 4: 이 시점에서 FlowMod 설치가 가능해짐
+
+- 이제 컨트롤러는 ARP Reply 의 목적지 MAC(H1_MAC)을 보고
+    - **H2 → H1 방향 FlowMod** 가 스위치 Flow Table 에 설치
+
+```python
+if dst in self.mac_to_port[1]:
+    out_port = self.mac_to_port[1][dst]   # = 1
+    actions = [OFPActionOutput(1)]
+    match = OFPMatch(in_port=2, eth_dst=H1_MAC)
+    add_flow(datapath, priority=1, match, actions)
+
+```
+
+---
+
+- **H1 첫 패킷(ARP Request)**
+    - H1_MAC 만 학습, H2_MAC 모름
+    - FLOOD, FlowMod 설치 불가
+    - `mac_to_port[1] = { H1_MAC: 1 }`
+- **H2 의 ARP Reply**
+    - H2_MAC 도 학습 → H1_MAC, H2_MAC 둘 다 학습
+    - 이때부터 **FlowMod(H2→H1)** 설치 가능
+    - `mac_to_port[1] = { H1_MAC: 1, H2_MAC: 2 }`
 
 ## **FlowMod 명령 발생 시점**
 
@@ -591,7 +755,7 @@ ryu-manager simple_switch_13.py
 
 - 컨트롤러 화면
 
-![pcon.png](pcon.png)
+![sdn.png](pcon.png)
 
 ---
 
@@ -604,11 +768,11 @@ sudo mn --topo single,3 --mac --switch ovsk,protocols=OpenFlow13 --controller=re
 
 - 미니넷 화면
 
-![pcon.png](pcon1.png)
+![sdn.png](pcon1.png)
 
 - 컨트롤러 화면
 
-![pcon.png](pcon2.png)
+![sdn.png](pcon2.png)
 
 ---
 
@@ -678,11 +842,11 @@ mininet> h1 ping h2
 
 - 미니넷 화면
 
-![pcon.png](pcon3.png)
+![sdn.png](pcon3.png)
 
 - 컨트롤러 화면
 
-![pcon.png](pcon4.png)
+![sdn.png](pcon4.png)
 
 ---
 
@@ -1454,11 +1618,11 @@ CLI(net)
 
 ### 실행화면
 
-![pcon.png](pcon5.png)
+![sdn.png](pcon5.png)
 
 ### 실행화면
 
-![pcon.png](pcon6.png)
+![sdn.png](pcon6.png)
 
 ### **ARP 프로토콜 출력**
 
@@ -1544,8 +1708,8 @@ ARP Reply:
 
 ### 실행화면
 
-![pcon.png](pcon7.png)
+![sdn.png](pcon7.png)
 
 ### 실행화면
 
-![pcon.png](pcon8.png)
+![sdn.png](pcon8.png)
