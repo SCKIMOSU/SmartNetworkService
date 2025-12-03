@@ -1,4 +1,393 @@
-# Ping 통해본 컨트롤러 학습
+# Ping 통해 본 컨트롤러 학습
+
+---
+
+### **Host → Router → Server**
+
+- 양 끝 호스트는 OSI 7계층 전체를 사용하지만, 중간 라우터는 L3까지만 처리
+- **클라이언트(호스트) 7계층 → 라우터(3계층) → 서버(7계층)** 로 이동
+
+```mermaid
+flowchart LR
+
+subgraph Host[클라이언트 호스트]
+    A7[7. Application<br>HTTP/SSH/FTP]
+    A6[6. Presentation<br>TLS/암호화/압축]
+    A5[5. Session<br>세션 관리]
+    A4[4. Transport<br>TCP/UDP, Port]
+    A3[3. Network<br>IP 패킷]
+    A2[2. Data Link<br>Ethernet, MAC]
+    A1[1. Physical<br>전기/광 신호]
+end
+
+subgraph Router[중간 라우터]
+    R3[3. Network<br>IP Routing]
+    R2[2. Data Link<br>Frame 재구성]
+    R1[1. Physical<br>신호]
+end
+
+subgraph Server[서버]
+    S7[7. Application<br>Web/DB/SSH]
+    S6[6. Presentation]
+    S5[5. Session]
+    S4[4. Transport]
+    S3[3. Network]
+    S2[2. Data Link]
+    S1[1. Physical]
+end
+
+%% 흐름
+
+A7 --> A6 --> A5 --> A4 --> A3 --> A2 --> A1
+A1 --> R1 --> R2 --> R3
+R3 --> R2 --> R1 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+
+```
+
+---
+
+### 호스트(클라이언트)
+
+- 호스트
+    - **7계층 전체** 사용
+- HTTP 요청
+
+```
+L7: HTTP 데이터 생성
+L6: TLS 암호화
+L5: 세션 설정
+L4: TCP 세그먼트 생성
+L3: IP 패킷 생성
+L2: Ethernet 프레임 캡슐화
+L1: PHY 신호로 전송
+
+```
+
+---
+
+### 라우터(중간 장비 → L3까지만 처리)
+
+- 라우터는 **L7~L4까지의 정보는 전혀 건드리지 않고**, 오직 아래 계층만 처리
+    - L3
+        - IP 목적지 보고 라우팅 결정
+    - L2
+        - MAC 주소를 다음 홉 MAC 으로 변경
+    - L1:
+        - 전기/광 신호로 다시 송신
+- 라우터는 **프레임을 벗겨서 → IP 패킷을 보고 → 다시 새 Ethernet 프레임으로 감싼 뒤 전송**
+
+---
+
+### 서버(수신)
+
+- 서버는 호스트와 반대로 **L1 → L7 방향으로 역캡슐화**를 수행
+
+```
+L1 신호 → L2 프레임 → L3 IP → L4 TCP → L5/6 처리 → L7 웹 서버에서 처리
+
+```
+
+---
+
+# **ARP 포함 Host → Switch → Router → Server 흐름**
+
+- 실제 네트워크에서 패킷이 이동하는 **전 과정(ARP → 프레임 → 라우팅 → 서버 전달)**
+
+```mermaid
+sequenceDiagram
+    participant H as Host (Client)
+    participant S as Switch (L2)
+    participant R as Router (Gateway)
+    participant SV as Server (Destination)
+
+    Note over H: 목적지 서버의 MAC 모름<br>→ Ping/HTTP 요청을 보내기 위해 ARP 필요
+
+    H->>S: ARP Request (who has Gateway_IP?)<br>Dst MAC = ff:ff:ff:ff:ff:ff
+    S->>R: ARP Request(FLOOD or known port)
+
+    R->>S: ARP Reply (Gateway_MAC)
+    S->>H: ARP Reply 전달
+
+    Note over H: ARP Table 업데이트:<br>Gateway_IP → Gateway_MAC
+
+    Note over H: 이제 목적지 서버로 가는 모든 패킷은<br>라우터 MAC 주소로 Ethernet 프레임 생성
+
+    H->>S: Ethernet Frame<br>Dst MAC = Gateway_MAC<br>Payload = IP Packet(서버 IP)
+    S->>R: Frame 전달 (MAC 기반 L2 포워딩)
+
+    Note over R: L2 헤더 제거 → L3(IP)을 보고 라우팅 결정<br>Next hop MAC 결정
+
+    R->>S: Ethernet Frame<br>Dst MAC = Server_MAC<br>Src MAC = Router_MAC
+    S->>SV: Frame 전달
+
+    SV->>SV: 프레임 디캡슐화→ IP → TCP/HTTP 처리
+
+    Note over SV: 서버가 응답 생성하여 라우터 MAC 으로 전송 준비
+
+    SV->>S: Ethernet Frame<br>Dst MAC = Router_MAC
+    S->>R: 전달
+
+    R->>S: Ethernet Frame<br>Dst MAC = Host_MAC
+    S->>H: 전달
+
+    Note over H: 응답 수신 완료
+
+```
+
+---
+
+### 단계 1 :  ARP 단계 (목적지 MAC 모를 때)
+
+- 호스트는 서버 MAC 을 직접 모릅
+    - 서버가 다른 네트워크라면 **게이트웨이 MAC이 필요**하므로 ARP 수행.
+        - Host → Switch → Router
+            - **ARP Request (브로드캐스트)**
+        - Router → Switch → Host
+            - **ARP Reply (유니캐스트)**
+        - Host 는 ARP Table 에 저장:
+
+```
+Gateway_IP → Gateway_MAC
+
+```
+
+---
+
+### 단계 2 : Host → Router (L2: MAC 기반)
+
+- 목적지 서버의 IP 는 Gateway 를 통해 전달되므로
+    - Ethernet Frame 의 목적지 MAC = **Gateway_MAC**
+    - IP 패킷의 목적지 IP = **Server_IP**
+
+---
+
+### 단계 3 : Router → Server (L3: 라우팅)
+
+- 라우터는
+    - Ethernet 헤더 제거(L2)
+    - IP 패킷을 보고 라우팅(L3)
+    - 다음 홉 또는 서버 MAC 으로 새 Ethernet Frame 생성(L2)
+
+---
+
+### 단계 4 : Server → Router → Host (응답 경로)
+
+- 라우터와 스위치는 ARP 캐시 및 MAC 학습 기반으로 L2 포워딩 + L3 라우팅을 통해 클라이언트까지 회신.
+
+---
+
+| 단계 | 설명 |
+| --- | --- |
+| 1 | Host: Gateway MAC 모름 → ARP Request |
+| 2 | Router: ARP Reply → Host 학습 |
+| 3 | Host: Gateway MAC 으로 Ethernet Frame 생성 |
+| 4 | Switch: MAC 기반 포워딩 |
+| 5 | Router: L3 라우팅 → Server MAC 으로 다시 Ethernet Frame 생성 |
+| 6 | Switch: Server 로 전달 |
+| 7 | Server 응답 → Router → Host |
+
+---
+
+### **Ping 패킷의 OSI 7계층 구조 (캡슐화)**
+
+- **왼쪽 H1**
+    - **Ping 패킷 OSI 7계층 캡슐화**
+- **중간 라우터**
+    - **3계층까지만 처리**
+- **오른쪽 H2**
+    - **OSI 7계층 디캡슐화**
+
+---
+
+### **Ping 패킷 OSI 7계층 캡슐화 + Router + H2 디캡슐화**
+
+```mermaid
+flowchart LR
+
+%% ---------------------- H1 ----------------------
+subgraph H1["H1 (Ping 송신자)"]
+direction TB
+H1_L7["7. Application<br/>ICMP Echo Request 생성"]
+H1_L6["6. Presentation"]
+H1_L5["5. Session"]
+H1_L4["4. Transport<br/>ICMP Encapsulation"]
+H1_L3["3. Network<br/>IP Header 추가"]
+H1_L2["2. Data Link<br/>Ethernet Header 추가"]
+H1_L1["1. Physical<br/>신호 전송"]
+
+H1_L7 --> H1_L6 --> H1_L5 --> H1_L4 --> H1_L3 --> H1_L2 --> H1_L1
+end
+
+%% ---------------------- Router ----------------------
+subgraph R["Router / Switch"]
+direction TB
+R_L1["1. Physical<br/>수신/송신"]
+R_L2["2. Data Link<br/>MAC 기반 포워딩"]
+R_L3["3. Network<br/>IP 기반 라우팅"]
+
+R_L1 --> R_L2 --> R_L3 --> R_L2 --> R_L1
+end
+
+%% ---------------------- H2 ----------------------
+subgraph H2["H2 (Ping 수신자)"]
+direction TB
+H2_L1["1. Physical<br/>신호 수신"]
+H2_L2["2. Data Link<br/>Ethernet Header 제거"]
+H2_L3["3. Network<br/>IP/ICMP 확인"]
+H2_L4["4. Transport<br/>ICMP 처리"]
+H2_L5["5. Session"]
+H2_L6["6. Presentation"]
+H2_L7["7. Application<br/>ICMP Echo Reply 생성"]
+
+H2_L1 --> H2_L2 --> H2_L3 --> H2_L4 --> H2_L5 --> H2_L6 --> H2_L7
+end
+
+%% 연결 흐름
+H1_L1 --> R_L1 --> H2_L1
+
+```
+
+---
+
+### **H1 → Ping 패킷 캡슐화**
+
+- H1 은 Ping(ICMP Echo Request)를 만들기 위해 다음 순서로 헤더를 붙임
+    - L7
+        - Ping Application 데이터 생성
+    - L4
+        - ICMP 헤더 추가 (Type=8)
+    - L3
+        - IP 헤더 추가 (Src IP=H1, Dst IP=H2)
+    - L2
+        - Ethernet 헤더 추가
+        - 목적지가 H2 MAC을 몰라서 ARP 했었다면 Dst=Gateway MAC
+    - L1
+        - 전기/광 신호로 전송
+
+---
+
+### **라우터**
+
+- 라우터는 **ICMP, IP Payload 내용 등 L4~L7 데이터는 전혀 해석하지 않음**
+- 라우터는 다음만 수행
+
+| 계층 | 라우터가 수행하는 것 |
+| --- | --- |
+| L3 | 목적지 IP 보고 라우팅 |
+| L2 | 새 MAC 주소로 Ethernet 프레임 재작성 |
+| L1 | 다음 홉으로 신호 송신 |
+
+### **H2 → Ping 패킷 디캡슐화**
+
+- H2는 패킷을 수신한 후
+    - L1
+        - 신호 수신
+    - L2
+        - 이더넷 헤더 제거
+    - L3
+        - IP 헤더 분석 → Protocol=1(ICMP)
+    - L4
+        - ICMP Echo Request 확인
+    - L7
+        - 응답(Ping Reply) 생성
+    - 다시 H1로 보내기 위해 동일 구조로 캡슐화하여 전송
+
+---
+
+```
+┌──────────────────────────────┐
+│   7. Application Layer        │  ← ping 명령 실행 (user space)
+│   (ping, echo, time display)  │
+└──────────────────────────────┘
+                 ↓
+┌──────────────────────────────┐
+│   6. Presentation Layer       │  ← 별도 작업 없음(암호화 없음)
+└──────────────────────────────┘
+                 ↓
+┌──────────────────────────────┐
+│   5. Session Layer            │  ← 세션 개념 없음
+└──────────────────────────────┘
+                 ↓
+┌──────────────────────────────┐
+│   4. Transport Layer          │
+│   (TCP/UDP를 사용하지 않음)   │
+│   Ping은 포트 없음!           │
+└──────────────────────────────┘
+                 ↓
+┌──────────────────────────────┐
+│   3. Network Layer (IP)       │
+│   +------------------------+  │
+│   |   IP Header            |  │
+│   |   - Src IP (H1)        |  │
+│   |   - Dst IP (H2)        |  │
+│   |   - Protocol = 1(ICMP) |  │
+│   +------------------------+  │
+│   |   ICMP Header          |  │
+│   |   Type=8(echo req)     |  │
+│   |   Code=0               |  │
+│   |   Identifier/Seq#      |  │
+│   |   Payload(data)        |  │
+│   +------------------------+  │
+└──────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│   2. Data Link Layer (Ethernet)         │
+│   +-----------------------------------+ │
+│   |  Ethernet Header                  | │
+│   |  - Dst MAC (H2_MAC)               | │
+│   |  - Src MAC (H1_MAC)               | │
+│   |  - EtherType = 0x0800 (IPv4)      | │
+│   +-----------------------------------+ │
+│   |        IP Packet (위 내용 전체)   | │
+│   +-----------------------------------+ │
+│   |  FCS (Frame Check Sequence)        | │
+└─────────────────────────────────────────┘
+                 ↓
+┌──────────────────────────────┐
+│   1. Physical Layer (PHY)    │
+│   전기/광 신호로 비트 전송    │
+└──────────────────────────────┘
+
+```
+
+---
+
+| OSI 계층 | Ping에서 수행되는 역할 |
+| --- | --- |
+| L7 Application | 사용자 ping 명령 실행 |
+| L6 Presentation | Encoding/Decoding 필요 없음 |
+| L5 Session | 세션 유지 없음 |
+| L4 Transport | TCP/UDP 사용 X → ICMP 는 L3 프로토콜 |
+| L3 Network | IP 헤더 + ICMP 헤더 생성 (핵심) |
+| L2 Data Link | Ethernet 헤더 추가 (MAC 주소 기반 전송) |
+| L1 Physical | 실제 신호(비트)로 전송 |
+
+---
+
+### Ping 패킷 구성
+
+- Ping Request 구조
+
+```
+Ethernet Frame
+ └── Ethernet Header
+      ├── Dst MAC = H2 MAC
+      ├── Src MAC = H1 MAC
+      └── EtherType = IPv4
+
+     IP Packet
+      ├── Src IP = H1 IP
+      ├── Dst IP = H2 IP
+      └── Protocol = 1 (ICMP)
+
+         ICMP Message
+           ├── Type = 8 (Echo Request)
+           ├── Code = 0
+           ├── Identifier
+           ├── Sequence Number
+           └── Data (payload)
+
+```
 
 ---
 
