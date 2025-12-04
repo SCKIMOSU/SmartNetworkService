@@ -4,7 +4,6 @@
 
 # SimpleMonitor
 
-- 
 
 ```python
 from operator import attrgetter
